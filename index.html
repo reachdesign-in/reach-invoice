@@ -466,12 +466,20 @@ function App() {
       <main>
         <header className="topbar">
           <button className="mobile-only" onClick={() => setMenuOpen(true)}>Menu</button>
-          <div>
+          <div className="topbar-title">
             <h1>{navItems.find(([id]) => id === active)?.[1]}</h1>
             <p>{formatDate(today())}</p>
           </div>
-          <button className="ghost" onClick={() => navigate('settings')}>Company</button>
-          <button className="ghost" onClick={logout}>Logout</button>
+          <div className="topbar-actions">
+            <button className="ghost topbar-action" onClick={() => navigate('settings')}>
+              <i className="fa-solid fa-building" />
+              <span>Company</span>
+            </button>
+            <button className="ghost topbar-action" onClick={logout}>
+              <i className="fa-solid fa-right-from-bracket" />
+              <span>Logout</span>
+            </button>
+          </div>
         </header>
         {menuOpen && <button className="scrim" onClick={() => setMenuOpen(false)} aria-label="Close menu" />}
         {screens[active]}
