@@ -301,8 +301,16 @@ tbody tr:hover { background: #fffdf3; }
   .topbar-actions { gap: 5px; }
   .topbar-action { min-height: 34px; padding: 0 8px; gap: 5px; border-radius: 6px; }
   .topbar-action span { font-size: 11px; }
-  .stat-grid { grid-template-columns: 1fr; }
-  .stat { min-height: 110px; }
+  .page { padding: 12px 10px 28px; }
+  .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+  .stat { min-height: 116px; padding: 12px; gap: 7px; }
+  .stat-card > i { width: 34px; height: 34px; font-size: 14px; border-radius: 6px; }
+  .stat span { font-size: 11px; line-height: 1.25; }
+  .stat strong { font-size: 18px; line-height: 1.15; }
+  .stat-card small { font-size: 9px; }
+  .quickbar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 12px 0; }
+  .quickbar button { width: 100%; min-height: 38px; padding: 0 8px; font-size: 12px; }
+  .quickbar button:last-child:nth-child(odd) { grid-column: 1 / -1; }
   .export-grid { grid-template-columns: 1fr; }
   .summary-strip { flex-direction: column; }
   .report-modes { width: 100%; }
