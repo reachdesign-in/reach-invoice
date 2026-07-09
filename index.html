@@ -268,6 +268,23 @@ function shareText(text, toast) {
   }
 }
 
+function confirmThen(options, onConfirm) {
+  const requestConfirm = window.REACH_CONFIRM_ACTION;
+  const config = {
+    title: 'Are you sure?',
+    message: 'Are you sure to continue?',
+    confirmText: 'Yes',
+    cancelText: 'No',
+    ...options,
+    onConfirm
+  };
+  if (requestConfirm) {
+    requestConfirm(config);
+    return;
+  }
+  if (window.confirm(config.message)) onConfirm();
+}
+
 function App() {
   const [auth, setAuth] = React.useState(() => {
     try {
@@ -279,6 +296,7 @@ function App() {
   const [active, setActive] = React.useState('dashboard');
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [toast, setToast] = React.useState('');
+  const [confirmDialog, setConfirmDialog] = React.useState(null);
   const [hydrated, setHydrated] = React.useState(false);
   const [syncPaused, setSyncPaused] = React.useState(true);
   const syncTimers = React.useRef({});
@@ -314,6 +332,15 @@ function App() {
     if (nextAuth) localStorage.setItem('reachInvoiceAuth', JSON.stringify(nextAuth));
     else localStorage.removeItem('reachInvoiceAuth');
   };
+
+  const confirmAction = React.useCallback((config) => setConfirmDialog(config), []);
+
+  React.useEffect(() => {
+    window.REACH_CONFIRM_ACTION = confirmAction;
+    return () => {
+      if (window.REACH_CONFIRM_ACTION === confirmAction) delete window.REACH_CONFIRM_ACTION;
+    };
+  }, [confirmAction]);
 
   React.useEffect(() => {
     if (!hydrated) return;
@@ -397,18 +424,26 @@ function App() {
   };
 
   const resetData = () => {
-    if (!confirm('Delete all cloud data for this company?')) return;
-    setClients([]);
-    setServices(serviceSeed);
-    setQuotations([]);
-    setInvoices([]);
-    setPayments([]);
-    setProjects([]);
-    setExpenses([]);
-    setSettings(emptySettings);
-    setActivities([]);
-    apiRequest('/api/app-state/reset', { method: 'POST', token: auth.token, body: {} }).catch((error) => notify(error.message));
-    notify('Cloud data reset');
+    confirmAction({
+      title: 'Reset cloud data?',
+      message: 'Are you sure to delete all cloud data for this company?',
+      confirmText: 'Yes, reset',
+      cancelText: 'No',
+      tone: 'danger',
+      onConfirm: () => {
+        setClients([]);
+        setServices(serviceSeed);
+        setQuotations([]);
+        setInvoices([]);
+        setPayments([]);
+        setProjects([]);
+        setExpenses([]);
+        setSettings(emptySettings);
+        setActivities([]);
+        apiRequest('/api/app-state/reset', { method: 'POST', token: auth.token, body: {} }).catch((error) => notify(error.message));
+        notify('Cloud data reset');
+      }
+    });
   };
 
   const importCloudBackup = async (backup) => {
@@ -417,9 +452,17 @@ function App() {
   };
 
   const logout = () => {
-    saveAuth(null);
-    setHydrated(false);
-    setSyncPaused(true);
+    confirmAction({
+      title: 'Logout?',
+      message: 'Are you sure to logout from REACH INVOICE?',
+      confirmText: 'Yes, logout',
+      cancelText: 'No',
+      onConfirm: () => {
+        saveAuth(null);
+        setHydrated(false);
+        setSyncPaused(true);
+      }
+    });
   };
 
   if (!auth?.token) {
@@ -485,6 +528,7 @@ function App() {
         {screens[active]}
       </main>
       {toast && <div className="toast">{toast}</div>}
+      {confirmDialog && <ConfirmDialog config={confirmDialog} onClose={() => setConfirmDialog(null)} />}
     </div>
   );
 }
@@ -1038,7 +1082,7 @@ function Documents({ ctx, kind }) {
                   {!isInvoice && <button onClick={() => duplicateQuote(row)}>Duplicate</button>}
                   {!isInvoice && <button onClick={() => convertToInvoice(row)}>Make Invoice</button>}
                   <button onClick={() => printDocument(row, data, isInvoice ? 'Invoice' : 'Quotation')}>Print</button>
-                  <button onClick={() => shareText(`${isInvoice ? 'Invoice' : 'Quotation'} ${row.number} for ${clientName(row.clientId)}: ${money(row.grandTotal)}`, notify)}>Share</button>
+                  <button onClick={() => shareDocumentFile(row, data, isInvoice ? 'Invoice' : 'Quotation', notify)}>Share</button>
                   <button className="danger" onClick={() => remove(setRows, row.id, notify, `${isInvoice ? 'Invoice' : 'Quotation'} deleted`)}>Delete</button>
                 </td>
               </tr>
@@ -1110,7 +1154,12 @@ function DocumentModal({ isInvoice, doc, setDoc, data, onClose, onSave }) {
       </div>
       <div className="modal-actions">
         <button className="ghost" onClick={onClose}>Cancel</button>
-        <button onClick={() => onSave(doc)}>Save</button>
+        <button onClick={() => confirmThen({
+          title: `Save ${isInvoice ? 'invoice' : 'quotation'}?`,
+          message: `Are you sure to save this ${isInvoice ? 'invoice' : 'quotation'}?`,
+          confirmText: 'Yes, save',
+          cancelText: 'No'
+        }, () => onSave(doc))}>Save</button>
       </div>
     </Modal>
   );
@@ -1175,7 +1224,12 @@ function PaymentModal({ payment, setPayment, invoices, data, onSave, onClose }) 
         <Field label="Transaction ID" value={payment.transactionId} onChange={(v) => setPayment({ ...payment, transactionId: v })} />
         <Field label="Notes" type="textarea" value={payment.notes} onChange={(v) => setPayment({ ...payment, notes: v })} />
       </div>
-      <div className="modal-actions"><button className="ghost" onClick={onClose}>Cancel</button><button onClick={() => onSave(payment)}>Save</button></div>
+      <div className="modal-actions"><button className="ghost" onClick={onClose}>Cancel</button><button onClick={() => confirmThen({
+        title: 'Save payment?',
+        message: 'Are you sure to save this payment?',
+        confirmText: 'Yes, save',
+        cancelText: 'No'
+      }, () => onSave(payment))}>Save</button></div>
     </Modal>
   );
 }
@@ -1252,7 +1306,12 @@ function ProjectForm({ data, record, setRecord, onClose, onSave, fields }) {
           {!tasks.length && <Empty text="No tasks added." />}
         </div>
       </Panel>
-      <div className="modal-actions"><button className="ghost" onClick={onClose}>Cancel</button><button onClick={() => onSave(record)}>Save</button></div>
+      <div className="modal-actions"><button className="ghost" onClick={onClose}>Cancel</button><button onClick={() => confirmThen({
+        title: 'Save project?',
+        message: 'Are you sure to save this project?',
+        confirmText: 'Yes, save',
+        cancelText: 'No'
+      }, () => onSave(record))}>Save</button></div>
     </Modal>
   );
 }
@@ -1531,7 +1590,12 @@ function CompanySettings({ ctx }) {
             {fields.map(([key, label, type]) => <Field key={key} label={label} type={type || 'text'} value={form[key]} onChange={(v) => setForm({ ...form, [key]: v })} />)}
           </div>
         </div>
-        <div className="modal-actions"><button onClick={() => { setters.setSettings(form); notify('Company settings saved'); }}>Save Settings</button></div>
+        <div className="modal-actions"><button onClick={() => confirmThen({
+          title: 'Save company settings?',
+          message: 'Are you sure to save company settings?',
+          confirmText: 'Yes, save',
+          cancelText: 'No'
+        }, () => { setters.setSettings(form); notify('Company settings saved'); })}>Save Settings</button></div>
       </Panel>
     </section>
   );
@@ -1565,7 +1629,7 @@ function CrudSection({ title, singular, rows, columns, searchKeys, getStatus, fi
       {!filtered.length && <Empty text={`No ${title.toLowerCase()} found.`} />}
       {activeModal && (customForm
         ? customForm(activeModal, setActiveModal, () => setActiveModal(null), (record) => { if (validate(record, fields)) { onSave(record); setActiveModal(null); } })
-        : <RecordModal title={`${activeModal._editing ? 'Edit' : 'Add'} ${singular}`} record={activeModal} setRecord={setActiveModal} fields={fields} clients={clients} onClose={() => setActiveModal(null)} onSave={() => { if (validate(activeModal, fields)) { onSave(activeModal); setActiveModal(null); } }} />
+        : <RecordModal title={`${activeModal._editing ? 'Edit' : 'Add'} ${singular}`} singular={singular} record={activeModal} setRecord={setActiveModal} fields={fields} clients={clients} onClose={() => setActiveModal(null)} onSave={() => { if (validate(activeModal, fields)) { onSave(activeModal); setActiveModal(null); } }} />
       )}
       {view && <Modal title={`${singular} Details`} onClose={() => setView(null)} wide>
         <DataSummary row={view} columns={columns} />
@@ -1575,7 +1639,7 @@ function CrudSection({ title, singular, rows, columns, searchKeys, getStatus, fi
   );
 }
 
-function RecordModal({ title, record, setRecord, fields, clients, onClose, onSave }) {
+function RecordModal({ title, singular = 'record', record, setRecord, fields, clients, onClose, onSave }) {
   return (
     <Modal title={title} onClose={onClose}>
       <div className="form-grid single">
@@ -1583,7 +1647,12 @@ function RecordModal({ title, record, setRecord, fields, clients, onClose, onSav
           <Field key={key} label={customLabel || fieldLabels[key] || key} type={type === 'client' ? 'select' : type} required={required} options={type === 'client' ? clients.map((item) => [item.id, item.name]) : options?.map((item) => [item, item])} value={record[key] || ''} onChange={(v) => setRecord({ ...record, [key]: v })} />
         ))}
       </div>
-      <div className="modal-actions"><button className="ghost" onClick={onClose}>Cancel</button><button onClick={onSave}>Save</button></div>
+      <div className="modal-actions"><button className="ghost" onClick={onClose}>Cancel</button><button onClick={() => confirmThen({
+        title: `Save ${singular.toLowerCase()}?`,
+        message: `Are you sure to save this ${singular.toLowerCase()}?`,
+        confirmText: 'Yes, save',
+        cancelText: 'No'
+      }, onSave)}>Save</button></div>
     </Modal>
   );
 }
@@ -1647,6 +1716,28 @@ function Modal({ title, children, onClose, wide }) {
   );
 }
 
+function ConfirmDialog({ config, onClose }) {
+  const confirm = () => {
+    onClose();
+    config.onConfirm?.();
+  };
+  return (
+    <div className="modal-backdrop">
+      <div className="modal confirm-modal">
+        <div className={`confirm-icon ${config.tone === 'danger' ? 'danger' : ''}`}>
+          <i className={`fa-solid ${config.tone === 'danger' ? 'fa-triangle-exclamation' : 'fa-circle-question'}`} />
+        </div>
+        <h2>{config.title || 'Are you sure?'}</h2>
+        <p>{config.message || 'Are you sure to continue?'}</p>
+        <div className="modal-actions confirm-actions">
+          <button className="ghost" onClick={onClose}>{config.cancelText || 'No'}</button>
+          <button className={config.tone === 'danger' ? 'danger' : ''} onClick={confirm}>{config.confirmText || 'Yes'}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Panel({ title, children }) {
   return <section className="panel"><h2>{title}</h2>{children}</section>;
 }
@@ -1678,9 +1769,16 @@ function upsert(setter, record) {
 }
 
 function remove(setter, id, notify, message) {
-  if (!confirm('Delete this record?')) return;
-  setter((items) => items.filter((item) => item.id !== id));
-  notify(message);
+  confirmThen({
+    title: 'Delete record?',
+    message: 'Are you sure to delete this record?',
+    confirmText: 'Yes, delete',
+    cancelText: 'No',
+    tone: 'danger'
+  }, () => {
+    setter((items) => items.filter((item) => item.id !== id));
+    notify(message);
+  });
 }
 
 function validate(record, fields) {
@@ -1777,6 +1875,178 @@ function printDocument(doc, data, kind) {
   win.document.write(`<!doctype html><html><head><title>${kind} ${doc.number}</title><link rel="stylesheet" href="${icons}"><style>${printCss()}</style></head><body>${renderPrintHtml(doc, data, kind)}</body></html>`);
   win.document.close();
   printWindowWhenReady(win);
+}
+
+async function shareDocumentFile(doc, data, kind, notify) {
+  try {
+    notify(`Preparing ${kind.toLowerCase()} image...`);
+    const blob = await createDocumentImageBlob(doc, data, kind);
+    const filename = `${kind} ${doc.number}.png`;
+    const file = new File([blob], filename, { type: 'image/png' });
+    if (navigator.canShare?.({ files: [file] })) {
+      await navigator.share({
+        title: `${kind} ${doc.number}`,
+        text: `${kind} ${doc.number} - ${money(doc.grandTotal)}`,
+        files: [file]
+      });
+      notify(`${kind} image shared`);
+    } else {
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = filename;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      notify(`${kind} image downloaded`);
+    }
+  } catch (error) {
+    shareText(`${kind} ${doc.number}: ${money(doc.grandTotal)}`, notify);
+  }
+}
+
+async function createDocumentImageBlob(doc, data, kind) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1080;
+  canvas.height = 1520;
+  const ctx = canvas.getContext('2d');
+  const client = data.clients.find((item) => item.id === doc.clientId) || {};
+  const pad = 72;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#202124';
+  ctx.textBaseline = 'top';
+
+  const logo = await loadCanvasImage(data.settings.logo || DEFAULT_LOGO).catch(() => null);
+  if (logo) {
+    drawContainImage(ctx, logo, pad, 82, 260, 135);
+  }
+
+  ctx.textAlign = 'left';
+  drawText(ctx, data.settings.companyName || 'REACH Design', 520, 82, 390, 36, 800, '#202124');
+  let y = 138;
+  splitAddress(data.settings.address).forEach((line) => {
+    drawText(ctx, line, 520, y, 420, 18, 500, '#5f6368');
+    y += 28;
+  });
+  y += 12;
+  drawContactLine(ctx, 'PHONE', data.settings.phone || '-', 520, y);
+  drawContactLine(ctx, 'EMAIL', data.settings.email || '-', 700, y);
+  drawContactLine(ctx, 'GSTIN', data.settings.gstNumber || 'Not provided', 520, y + 34);
+
+  ctx.strokeStyle = '#efb900';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(pad, 275);
+  ctx.lineTo(canvas.width - pad, 275);
+  ctx.stroke();
+
+  drawText(ctx, 'Client Details', pad, 335, 360, 22, 800, '#202124');
+  drawText(ctx, client.name || '-', pad, 374, 360, 18, 500, '#5f6368');
+  drawText(ctx, client.company || '', pad, 406, 360, 18, 500, '#5f6368');
+  drawText(ctx, client.billingAddress || '', pad, 438, 420, 16, 500, '#5f6368', 2);
+  drawText(ctx, `GST: ${client.gst || '-'}`, pad, 502, 360, 16, 500, '#5f6368');
+
+  ctx.textAlign = 'right';
+  drawText(ctx, `${kind} Details`, canvas.width - pad, 335, 360, 22, 800, '#202124', 1, 'right');
+  drawText(ctx, `No: ${doc.number}`, canvas.width - pad, 374, 360, 18, 500, '#5f6368', 1, 'right');
+  drawText(ctx, `Date: ${formatDate(doc.date)}`, canvas.width - pad, 406, 360, 18, 500, '#5f6368', 1, 'right');
+  drawText(ctx, `Status: ${doc.status}`, canvas.width - pad, 438, 360, 18, 500, '#5f6368', 1, 'right');
+
+  const tableTop = 575;
+  ctx.fillStyle = '#f7f7f7';
+  ctx.fillRect(pad, tableTop, canvas.width - pad * 2, 54);
+  const columns = [
+    ['ITEM', pad + 16, 'left'],
+    ['QTY', 470, 'right'],
+    ['RATE', 610, 'right'],
+    ['DISC.', 750, 'right'],
+    ['GST', 865, 'right'],
+    ['TOTAL', canvas.width - pad - 16, 'right']
+  ];
+  columns.forEach(([label, x, align]) => drawText(ctx, label, x, tableTop + 18, 120, 13, 800, '#5f6368', 1, align));
+
+  let rowY = tableTop + 78;
+  (doc.items || []).slice(0, 8).forEach((line) => {
+    drawText(ctx, line.name || line.description || '-', pad + 16, rowY, 330, 18, 500, '#202124');
+    drawText(ctx, line.description || '', pad + 16, rowY + 26, 330, 14, 500, '#777777', 2);
+    drawText(ctx, formatNumber(line.qty), 470, rowY, 70, 18, 500, '#202124', 1, 'right');
+    drawText(ctx, money(line.rate), 610, rowY, 120, 18, 500, '#202124', 1, 'right');
+    drawText(ctx, money(line.discount), 750, rowY, 120, 18, 500, '#202124', 1, 'right');
+    drawText(ctx, percent(line.gst), 865, rowY, 80, 18, 500, '#202124', 1, 'right');
+    drawText(ctx, money(lineTotals(line).total), canvas.width - pad - 16, rowY, 130, 18, 700, '#202124', 1, 'right');
+    ctx.strokeStyle = '#e5e7ea';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(pad, rowY + 76);
+    ctx.lineTo(canvas.width - pad, rowY + 76);
+    ctx.stroke();
+    rowY += 86;
+  });
+
+  const totalY = Math.max(rowY + 28, 930);
+  ctx.textAlign = 'right';
+  drawText(ctx, `Subtotal: ${money(doc.subtotal)}`, canvas.width - pad, totalY, 300, 20, 500, '#202124', 1, 'right');
+  drawText(ctx, `GST: ${money(doc.gst)}`, canvas.width - pad, totalY + 38, 300, 20, 500, '#202124', 1, 'right');
+  drawText(ctx, `Discount: ${money(doc.discount)}`, canvas.width - pad, totalY + 76, 300, 20, 500, '#202124', 1, 'right');
+  drawText(ctx, `Grand Total: ${money(doc.grandTotal)}`, canvas.width - pad, totalY + 126, 420, 30, 800, '#202124', 1, 'right');
+
+  ctx.textAlign = 'left';
+  drawText(ctx, 'Terms', pad, 1245, 420, 22, 800, '#202124');
+  drawText(ctx, doc.terms || '', pad, 1282, 520, 16, 500, '#5f6368', 3);
+  if (doc.notes) drawText(ctx, doc.notes, pad, 1360, 520, 15, 500, '#777777', 2);
+  ctx.strokeStyle = '#222222';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(690, 1325);
+  ctx.lineTo(1000, 1325);
+  ctx.stroke();
+  ctx.textAlign = 'center';
+  drawText(ctx, 'Authorized Signature', 845, 1343, 250, 16, 500, '#202124', 1, 'center');
+
+  return new Promise((resolve) => canvas.toBlob(resolve, 'image/png', 0.95));
+}
+
+function loadCanvasImage(src) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = reject;
+    image.src = src;
+  });
+}
+
+function drawContainImage(ctx, image, x, y, width, height) {
+  const ratio = Math.min(width / image.naturalWidth, height / image.naturalHeight);
+  const drawWidth = image.naturalWidth * ratio;
+  const drawHeight = image.naturalHeight * ratio;
+  ctx.drawImage(image, x + (width - drawWidth) / 2, y + (height - drawHeight) / 2, drawWidth, drawHeight);
+}
+
+function drawContactLine(ctx, label, value, x, y) {
+  drawText(ctx, label, x, y, 56, 11, 800, '#8a6800');
+  drawText(ctx, value, x + 72, y - 2, 240, 14, 500, '#303438');
+}
+
+function drawText(ctx, text, x, y, maxWidth, size, weight = 500, color = '#202124', maxLines = 1, align = 'left') {
+  ctx.fillStyle = color;
+  ctx.font = `${weight} ${size}px Arial, sans-serif`;
+  ctx.textAlign = align;
+  const words = String(text ?? '').split(/\s+/).filter(Boolean);
+  const lines = [];
+  let line = '';
+  words.forEach((word) => {
+    const test = line ? `${line} ${word}` : word;
+    if (ctx.measureText(test).width > maxWidth && line) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = test;
+    }
+  });
+  if (line) lines.push(line);
+  (lines.length ? lines : ['-']).slice(0, maxLines).forEach((lineText, index) => {
+    ctx.fillText(lineText, x, y + index * (size + 8), maxWidth);
+  });
 }
 
 function printReceipt(payment, data) {
