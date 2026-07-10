@@ -1611,16 +1611,33 @@ function ExportImport({ ctx, resetData }) {
 function CompanySettings({ ctx }) {
   const { data, setters, notify } = ctx;
   const [form, setForm] = React.useState(data.settings);
-  React.useEffect(() => setForm(data.settings), [data.settings]);
+  const [dirty, setDirty] = React.useState(false);
+  const [uploadNotice, setUploadNotice] = React.useState('');
+  React.useEffect(() => {
+    if (!dirty) setForm(data.settings);
+  }, [data.settings, dirty]);
   const fields = [
     ['companyName', 'Company Name'], ['phone', 'Phone'], ['email', 'Email'], ['address', 'Address', 'textarea'], ['gstNumber', 'GST Number'],
     ['bankDetails', 'Bank Details', 'textarea'], ['upiId', 'UPI ID'], ['invoicePrefix', 'Invoice Prefix'], ['quotationPrefix', 'Quotation Prefix'], ['terms', 'Default Terms and Conditions', 'textarea']
   ];
   const uploadImage = (key, file) => {
     if (!file) return;
+    if (!String(file.type || '').startsWith('image/')) {
+      setUploadNotice('Please upload an image file only.');
+      return;
+    }
     const reader = new FileReader();
-    reader.onload = () => setForm((current) => ({ ...current, [key]: reader.result }));
+    reader.onload = () => {
+      setForm((current) => ({ ...current, [key]: reader.result }));
+      setDirty(true);
+      setUploadNotice(key === 'signature' ? 'Signature ready. Click Save Settings.' : 'Logo ready. Click Save Settings.');
+    };
+    reader.onerror = () => setUploadNotice('Upload failed. Please try another image.');
     reader.readAsDataURL(file);
+  };
+  const updateSetting = (key, value) => {
+    setDirty(true);
+    setForm((current) => ({ ...current, [key]: value }));
   };
   return (
     <section className="page">
@@ -1630,12 +1647,14 @@ function CompanySettings({ ctx }) {
             <img src={form.logo || DEFAULT_LOGO} alt="Company logo" />
             <label>Upload Logo<input type="file" accept="image/*" onChange={(e) => uploadImage('logo', e.target.files[0])} /></label>
             <div className="signature-uploader">
-              <div>{form.signature ? <img src={form.signature} alt="Invoice signature" /> : <span>Signature preview</span>}</div>
+              <div className={form.signature ? 'has-signature' : ''}>{form.signature ? <img src={form.signature} alt="Invoice signature" /> : <span>Signature preview</span>}</div>
               <label>Upload Signature<input type="file" accept="image/*" onChange={(e) => uploadImage('signature', e.target.files[0])} /></label>
+              {form.signature && <button type="button" className="ghost remove-signature" onClick={() => updateSetting('signature', '')}>Remove Signature</button>}
+              {uploadNotice && <small>{uploadNotice}</small>}
             </div>
           </div>
           <div className="form-grid">
-            {fields.map(([key, label, type]) => <Field key={key} label={label} type={type || 'text'} value={form[key]} onChange={(v) => setForm({ ...form, [key]: v })} />)}
+            {fields.map(([key, label, type]) => <Field key={key} label={label} type={type || 'text'} value={form[key]} onChange={(v) => updateSetting(key, v)} />)}
           </div>
         </div>
         <div className="modal-actions"><button onClick={() => confirmThen({
@@ -1643,7 +1662,7 @@ function CompanySettings({ ctx }) {
           message: 'Are you sure to save company settings?',
           confirmText: 'Yes, save',
           cancelText: 'No'
-        }, () => { setters.setSettings(form); notify('Company settings saved'); })}>Save Settings</button></div>
+        }, () => { setters.setSettings(form); setDirty(false); setUploadNotice(''); notify('Company settings saved'); })}>Save Settings</button></div>
       </Panel>
     </section>
   );
