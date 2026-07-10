@@ -113,9 +113,13 @@ button:disabled { opacity: .55; cursor: not-allowed; transform: none; }
 .preview-summary strong { color: #202124; font-size: 20px; }
 .preview-rows { display: grid; border-top: 1px solid #e5e7e9; }
 .preview-rows > div { min-height: 58px; padding: 11px 4px; display: flex; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid #e5e7e9; }
+.preview-row-button { width: 100%; min-height: 58px; padding: 11px 4px; display: flex; align-items: center; justify-content: space-between; gap: 20px; border: 0; border-bottom: 1px solid #e5e7e9; border-radius: 0; background: transparent; color: inherit; text-align: left; }
+.preview-row-button:hover { background: #fffaf0; color: #202124; }
+.preview-row-button span { color: #202124; }
 .preview-rows span { display: grid; gap: 4px; font-size: 13px; font-weight: 700; }
 .preview-rows small { color: #777b7f; font-size: 11px; font-weight: 500; }
 .preview-rows > div > strong { font-size: 13px; white-space: nowrap; }
+.preview-row-button > strong { font-size: 13px; white-space: nowrap; }
 .custom-report { display: grid; gap: 18px; }
 .report-modes { display: inline-flex; width: max-content; padding: 4px; gap: 4px; background: #f0f1f2; border-radius: 7px; }
 .report-modes button { min-height: 34px; background: transparent; color: #62666a; font-size: 12px; }
@@ -183,6 +187,13 @@ tbody tr:hover { background: #fffdf3; }
 .modal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
 .modal-head h2 { margin: 0; font-size: 19px; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+.confirm-modal { width: min(430px, 100%); text-align: center; padding: 26px; }
+.confirm-modal h2 { margin: 10px 0 8px; font-size: 22px; }
+.confirm-modal p { margin: 0; color: #62666a; line-height: 1.55; }
+.confirm-icon { width: 48px; height: 48px; display: grid; place-items: center; margin: 0 auto; color: #8a6800; background: #fff1a8; border-radius: 50%; }
+.confirm-icon.danger { color: #a02828; background: #fff0f0; }
+.confirm-actions { justify-content: center; }
+.confirm-actions button { min-width: 110px; }
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .form-grid.single { grid-template-columns: 1fr; }
 .field { display: grid; gap: 6px; color: #5d6064; font-size: 12px; font-weight: 700; }
@@ -208,6 +219,14 @@ tbody tr:hover { background: #fffdf3; }
 .totals { display: grid; justify-content: end; gap: 7px; border-top: 1px solid #e3e4e6; padding-top: 14px; }
 .totals span { display: flex; justify-content: space-between; gap: 50px; font-size: 13px; }
 .totals span:last-child { font-size: 16px; }
+.payment-entry-field { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: end; }
+.full-paid-btn { min-height: 40px; white-space: nowrap; }
+.payment-history { display: grid; gap: 8px; margin-top: 16px; padding: 14px; border: 1px solid #e8e0bc; border-radius: 8px; background: #fffdf4; }
+.payment-history > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 6px; border-bottom: 1px solid #efe6c4; }
+.payment-history > div strong { font-size: 14px; }
+.payment-history > div span { color: #777b7f; font-size: 12px; }
+.payment-history p { margin: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; color: #55595d; font-size: 13px; }
+.payment-history p strong { color: #202124; white-space: nowrap; }
 .summary-strip { display: flex; gap: 12px; margin-bottom: 16px; }
 .summary-strip strong { padding: 10px 13px; background: #fff; border: 1px solid #e0e2e4; border-radius: 6px; font-size: 13px; }
 
@@ -283,6 +302,7 @@ tbody tr:hover { background: #fffdf3; }
   .toolbar > button { margin-left: 0; }
   .line-row { grid-template-columns: 1fr 1fr; }
   .form-grid { grid-template-columns: 1fr; }
+  .payment-entry-field { grid-template-columns: 1fr; }
   .revenue-chart { grid-template-columns: 1fr; padding: 22px; }
   .donut-wrap { width: 170px; height: 170px; }
   .preview-summary { grid-template-columns: 1fr; }
