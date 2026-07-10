@@ -297,6 +297,7 @@ function App() {
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [toast, setToast] = React.useState('');
   const [confirmDialog, setConfirmDialog] = React.useState(null);
+  const [openTarget, setOpenTarget] = React.useState(null);
   const [hydrated, setHydrated] = React.useState(false);
   const [syncPaused, setSyncPaused] = React.useState(true);
   const syncTimers = React.useRef({});
@@ -418,8 +419,9 @@ function App() {
 
   const addActivity = (text) => setActivities((items) => [{ id: uid(), date: new Date().toISOString(), text }, ...items].slice(0, 80));
 
-  const navigate = (id) => {
+  const navigate = (id, recordId = '') => {
     setActive(id);
+    setOpenTarget(recordId ? { section: id, recordId } : null);
     setMenuOpen(false);
   };
 
@@ -473,7 +475,7 @@ function App() {
     return <div className="loading-screen">Loading REACH INVOICE cloud data...</div>;
   }
 
-  const context = { data, setters, notify, addActivity, navigate, importCloudBackup };
+  const context = { data, setters, notify, addActivity, navigate, importCloudBackup, openTarget, setOpenTarget };
   const screens = {
     dashboard: <Dashboard ctx={context} />,
     clients: <Clients ctx={context} />,
@@ -703,31 +705,35 @@ function Dashboard({ ctx }) {
       </div>
       {selectedStat && (
         <Modal title={stats.find(([id]) => id === selectedStat)?.[1] || 'Dashboard Details'} onClose={() => setSelectedStat(null)} wide>
-          <DashboardStatPreview type={selectedStat} data={data} invoiceRevenue={invoiceRevenue} paid={paid} pending={pending} monthSales={monthSales} />
+          <DashboardStatPreview type={selectedStat} data={data} navigate={navigate} close={() => setSelectedStat(null)} invoiceRevenue={invoiceRevenue} paid={paid} pending={pending} monthSales={monthSales} />
         </Modal>
       )}
     </section>
   );
 }
 
-function DashboardStatPreview({ type, data, invoiceRevenue, paid, pending, monthSales }) {
-  if (type === 'customReport') return <DashboardCustomReport data={data} />;
+function DashboardStatPreview({ type, data, navigate, close, invoiceRevenue, paid, pending, monthSales }) {
+  if (type === 'customReport') return <DashboardCustomReport data={data} navigate={navigate} close={close} />;
   const unpaid = data.invoices.filter((item) => Number(item.balanceAmount || 0) > 0);
   const active = data.projects.filter((item) => !['Completed', 'Cancelled'].includes(item.status));
   const completed = data.projects.filter((item) => item.status === 'Completed');
   const monthly = data.invoices.filter((item) => item.date >= monthStart());
   const client = (id) => data.clients.find((item) => item.id === id)?.name || 'No client';
+  const openInvoice = (invoice) => {
+    close?.();
+    navigate?.('invoices', invoice.id);
+  };
 
   if (type === 'revenue') return (
     <div className="dashboard-preview">
       <div className="preview-summary"><span>Total invoiced<strong>{money(invoiceRevenue)}</strong></span><span>Received<strong>{money(paid)}</strong></span><span>Outstanding<strong>{money(pending)}</strong></span></div>
-      <PreviewRows rows={data.invoices} empty="No invoices yet." render={(invoice) => <><span>{invoice.number}<small>{client(invoice.clientId)}</small></span><strong>{money(invoice.grandTotal)}</strong></>} />
+      <PreviewRows rows={data.invoices} empty="No invoices yet." onRowClick={openInvoice} render={(invoice) => <><span>{invoice.number}<small>{client(invoice.clientId)}</small></span><strong>{money(invoice.grandTotal)}</strong></>} />
     </div>
   );
   if (type === 'pending' || type === 'unpaidInvoices') return (
     <div className="dashboard-preview">
       <div className="preview-summary"><span>Outstanding total<strong>{money(pending)}</strong></span><span>Unpaid invoices<strong>{unpaid.length}</strong></span></div>
-      <PreviewRows rows={unpaid} empty="No pending payments." render={(invoice) => <><span>{invoice.number}<small>{client(invoice.clientId)} · Due {formatDate(invoice.dueDate)}</small></span><strong>{money(invoice.balanceAmount)}</strong></>} />
+      <PreviewRows rows={unpaid} empty="No pending payments." onRowClick={openInvoice} render={(invoice) => <><span>{invoice.number}<small>{client(invoice.clientId)} · Due {formatDate(invoice.dueDate)}</small></span><strong>{money(invoice.balanceAmount)}</strong></>} />
     </div>
   );
   if (type === 'clients') return (
@@ -743,12 +749,12 @@ function DashboardStatPreview({ type, data, invoiceRevenue, paid, pending, month
   return (
     <div className="dashboard-preview">
       <div className="preview-summary"><span>This month sales<strong>{money(monthSales)}</strong></span><span>Invoices created<strong>{monthly.length}</strong></span></div>
-      <PreviewRows rows={monthly} empty="No invoices this month." render={(invoice) => <><span>{invoice.number}<small>{client(invoice.clientId)} · {formatDate(invoice.date)}</small></span><strong>{money(invoice.grandTotal)}</strong></>} />
+      <PreviewRows rows={monthly} empty="No invoices this month." onRowClick={openInvoice} render={(invoice) => <><span>{invoice.number}<small>{client(invoice.clientId)} · {formatDate(invoice.date)}</small></span><strong>{money(invoice.grandTotal)}</strong></>} />
     </div>
   );
 }
 
-function DashboardCustomReport({ data }) {
+function DashboardCustomReport({ data, navigate, close }) {
   const currentMonth = today().slice(0, 7);
   const currentYear = today().slice(0, 4);
   const [mode, setMode] = React.useState('month');
@@ -769,6 +775,10 @@ function DashboardCustomReport({ data }) {
   const outstanding = invoices.reduce((sum, item) => sum + Number(item.balanceAmount || 0), 0);
   const netCash = received - expenses;
   const client = (id) => data.clients.find((item) => item.id === id)?.name || 'No client';
+  const openInvoice = (invoice) => {
+    close?.();
+    navigate?.('invoices', invoice.id);
+  };
   const label = mode === 'month'
     ? month ? new Date(`${month}-01T00:00:00`).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' }) : 'Select a month'
     : mode === 'year' ? year : `${from ? formatDate(from) : 'Start'} to ${to ? formatDate(to) : 'Today'}`;
@@ -794,7 +804,7 @@ function DashboardCustomReport({ data }) {
         <span>Net Cash Flow<strong className={netCash < 0 ? 'negative' : ''}>{money(netCash)}</strong></span>
         <span>Invoices<strong>{invoices.length}</strong></span>
       </div>
-      <PreviewRows rows={invoices} empty="No invoices found for this period." render={(invoice) => <><span>{invoice.number}<small>{client(invoice.clientId)} · {formatDate(invoice.date)}</small></span><strong>{money(invoice.grandTotal)}</strong></>} />
+      <PreviewRows rows={invoices} empty="No invoices found for this period." onRowClick={openInvoice} render={(invoice) => <><span>{invoice.number}<small>{client(invoice.clientId)} · {formatDate(invoice.date)}</small></span><strong>{money(invoice.grandTotal)}</strong></>} />
     </div>
   );
 }
@@ -891,9 +901,14 @@ function ModernMonthField({ label, value, onChange }) {
   );
 }
 
-function PreviewRows({ rows, empty, render }) {
+function PreviewRows({ rows, empty, render, onRowClick }) {
   if (!rows.length) return <Empty text={empty} />;
-  return <div className="preview-rows">{rows.slice(0, 8).map((row) => <div key={row.id}>{render(row)}</div>)}</div>;
+  return <div className="preview-rows">{rows.slice(0, 8).map((row) => {
+    const content = render(row);
+    return onRowClick
+      ? <button type="button" className="preview-row-button" key={row.id} onClick={() => onRowClick(row)}>{content}</button>
+      : <div key={row.id}>{content}</div>;
+  })}</div>;
 }
 
 function Clients({ ctx }) {
@@ -984,7 +999,7 @@ function Invoices({ ctx }) {
 }
 
 function Documents({ ctx, kind }) {
-  const { data, setters, notify, addActivity } = ctx;
+  const { data, setters, notify, addActivity, openTarget, setOpenTarget } = ctx;
   const isInvoice = kind === 'invoice';
   const rows = isInvoice ? data.invoices : data.quotations;
   const setRows = isInvoice ? setters.setInvoices : setters.setQuotations;
@@ -1004,10 +1019,51 @@ function Documents({ ctx, kind }) {
     ? ['Draft', 'Sent', 'Partially Paid', 'Paid', 'Overdue', 'Cancelled']
     : ['Draft', 'Sent', 'Approved', 'Rejected', 'Converted to Invoice'];
 
+  React.useEffect(() => {
+    if (!openTarget || openTarget.section !== (isInvoice ? 'invoices' : 'quotations')) return;
+    const target = rows.find((item) => item.id === openTarget.recordId);
+    if (target) setView(target);
+    setOpenTarget?.(null);
+  }, [openTarget, rows, isInvoice, setOpenTarget]);
+
   const saveDoc = (doc) => {
     const totals = documentTotals(doc.items);
-    const paidAmount = isInvoice ? Number(doc.paidAmount || 0) : 0;
-    const next = { ...doc, ...totals, paidAmount, balanceAmount: Math.max(totals.grandTotal - paidAmount, 0) };
+    if (isInvoice) {
+      const requestedPaid = Math.min(Math.max(Number(doc.paidAmount || 0), 0), totals.grandTotal);
+      const baseInvoice = { ...doc, ...totals, paidAmount: requestedPaid, balanceAmount: Math.max(totals.grandTotal - requestedPaid, 0) };
+      const existingPayments = data.payments.filter((payment) => payment.invoiceId === doc.id);
+      const manualPayments = existingPayments.filter((payment) => payment.source !== 'invoice-editor');
+      const manualPaid = manualPayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+      const editorPayment = existingPayments.find((payment) => payment.source === 'invoice-editor');
+      const editorAmount = Math.max(requestedPaid - manualPaid, 0);
+      const nextPayments = data.payments.filter((payment) => !(payment.invoiceId === doc.id && payment.source === 'invoice-editor'));
+      if (editorAmount > 0) {
+        nextPayments.unshift({
+          id: editorPayment?.id || uid(),
+          date: editorPayment?.date || today(),
+          invoiceId: doc.id,
+          invoiceNumber: doc.number,
+          clientId: doc.clientId,
+          amount: editorAmount,
+          paymentMode: 'Invoice Update',
+          transactionId: '',
+          notes: 'Recorded from invoice edit',
+          source: 'invoice-editor'
+        });
+      }
+      setters.setPayments(nextPayments);
+      setRows((items) => {
+        const baseRows = items.some((item) => item.id === baseInvoice.id)
+          ? items.map((item) => item.id === baseInvoice.id ? baseInvoice : item)
+          : [baseInvoice, ...items];
+        return recalculateInvoiceBalances(baseRows, nextPayments);
+      });
+      notify('Invoice saved');
+      addActivity(`Saved invoice ${baseInvoice.number}`);
+      setModal(null);
+      return;
+    }
+    const next = { ...doc, ...totals, paidAmount: 0, balanceAmount: 0 };
     upsert(setRows, next);
     notify(`${isInvoice ? 'Invoice' : 'Quotation'} saved`);
     addActivity(`Saved ${isInvoice ? 'invoice' : 'quotation'} ${next.number}`);
@@ -1108,6 +1164,9 @@ function DocumentModal({ isInvoice, doc, setDoc, data, onClose, onSave }) {
   };
   const totals = documentTotals(doc.items);
   const balance = Math.max(totals.grandTotal - Number(doc.paidAmount || 0), 0);
+  const paymentHistory = isInvoice
+    ? data.payments.filter((payment) => payment.invoiceId === doc.id).sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
+    : [];
   return (
     <Modal title={`${doc._editing ? 'Edit' : 'Create'} ${isInvoice ? 'Invoice' : 'Quotation'}`} onClose={onClose} wide>
       <div className="form-grid">
@@ -1116,7 +1175,12 @@ function DocumentModal({ isInvoice, doc, setDoc, data, onClose, onSave }) {
         <Field label={isInvoice ? 'Due Date' : 'Valid Till'} type="date" value={isInvoice ? doc.dueDate : doc.validTill} onChange={(v) => setDoc({ ...doc, [isInvoice ? 'dueDate' : 'validTill']: v })} />
         <Field label="Client" type="select" value={doc.clientId} options={data.clients.map((item) => [item.id, item.name])} onChange={(v) => setDoc({ ...doc, clientId: v })} required />
         <Field label="Status" type="select" value={doc.status} options={(isInvoice ? ['Draft', 'Sent', 'Partially Paid', 'Paid', 'Overdue', 'Cancelled'] : ['Draft', 'Sent', 'Approved', 'Rejected', 'Converted to Invoice']).map((v) => [v, v])} onChange={(v) => setDoc({ ...doc, status: v })} />
-        {isInvoice && <Field label="Amount Already Received (Rs.)" help="Enter 0 if the client has not paid yet." placeholder="Example: 500" type="number" value={doc.paidAmount} onChange={(v) => setDoc({ ...doc, paidAmount: v })} />}
+        {isInvoice && <div className="payment-entry-field">
+          <Field label="Amount Already Received (Rs.)" help="Enter 0 if the client has not paid yet." placeholder="Example: 500" type="number" value={doc.paidAmount} onChange={(v) => setDoc({ ...doc, paidAmount: v })} />
+          <button type="button" className="ghost full-paid-btn" onClick={() => setDoc({ ...doc, paidAmount: totals.grandTotal, status: 'Paid' })}>
+            <i className="fa-solid fa-circle-check" /> Full Paid
+          </button>
+        </div>}
       </div>
       <div className="line-editor">
         <div className="line-head">
@@ -1152,6 +1216,7 @@ function DocumentModal({ isInvoice, doc, setDoc, data, onClose, onSave }) {
         <span>Grand Total <strong>{money(totals.grandTotal)}</strong></span>
         {isInvoice && <span>Balance <strong>{money(balance)}</strong></span>}
       </div>
+      {isInvoice && <PaymentHistoryBlock payments={paymentHistory} />}
       <div className="modal-actions">
         <button className="ghost" onClick={onClose}>Cancel</button>
         <button onClick={() => confirmThen({
@@ -1758,6 +1823,23 @@ function History({ title, rows, nameKey = 'number', amountKey = 'grandTotal' }) 
   return <div className="wide-field"><strong>{title}</strong>{rows.length ? rows.map((row) => <p key={row.id}>{row[nameKey] || row.invoiceNumber || formatDate(row.date)} {row.date && (row[nameKey] || row.invoiceNumber) ? `- ${formatDate(row.date)}` : ''} {amountKey && row[amountKey] ? `- ${money(row[amountKey])}` : ''}</p>) : <p>No records.</p>}</div>;
 }
 
+function PaymentHistoryBlock({ payments }) {
+  return (
+    <div className="payment-history">
+      <div>
+        <strong>Payment History</strong>
+        <span>{payments.length ? `${payments.length} payment${payments.length === 1 ? '' : 's'} recorded` : 'No payment recorded yet'}</span>
+      </div>
+      {payments.length ? payments.map((payment) => (
+        <p key={payment.id}>
+          <span>{formatDate(payment.date)} - {payment.paymentMode || 'Payment'}</span>
+          <strong>{money(payment.amount)}</strong>
+        </p>
+      )) : <p><span>Payment details will appear here after saving received amount.</span><strong>{money(0)}</strong></p>}
+    </div>
+  );
+}
+
 function DataSummary({ row, columns }) {
   return <div className="detail-grid">{columns.map(([key, label, format]) => <Info key={key} label={label} value={format ? format(row[key], row) : displayCellValue(key, row[key])} />)}</div>;
 }
@@ -1843,6 +1925,9 @@ function recalculateInvoiceBalances(invoices, payments) {
 
 function DocumentPreview({ doc, data, kind }) {
   const client = data.clients.find((item) => item.id === doc.clientId) || {};
+  const paymentHistory = kind === 'Invoice'
+    ? data.payments.filter((payment) => payment.invoiceId === doc.id).sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
+    : [];
   return (
     <div className="print-sheet">
       <div className="print-head">
@@ -1863,7 +1948,8 @@ function DocumentPreview({ doc, data, kind }) {
         <div><strong>{kind} Details</strong><p>No: {doc.number}</p><p>Date: {formatDate(doc.date)}</p><p>Status: {doc.status}</p></div>
       </div>
       <table className="print-table"><thead><tr><th>Item</th><th>Qty</th><th>Rate</th><th>Discount</th><th>GST</th><th>Total</th></tr></thead><tbody>{doc.items.map((line) => <tr key={line.id}><td>{line.name || line.description}<small>{line.description}</small></td><td>{line.qty}</td><td>{money(line.rate)}</td><td>{money(line.discount)}</td><td>{percent(line.gst)}</td><td>{money(lineTotals(line).total)}</td></tr>)}</tbody></table>
-      <div className="print-total"><p>Subtotal: {money(doc.subtotal)}</p><p>GST: {money(doc.gst)}</p><p>Discount: {money(doc.discount)}</p><strong>Grand Total: {money(doc.grandTotal)}</strong></div>
+      <div className="print-total"><p>Subtotal: {money(doc.subtotal)}</p><p>GST: {money(doc.gst)}</p><p>Discount: {money(doc.discount)}</p>{kind === 'Invoice' && <><p>Paid: {money(doc.paidAmount)}</p><p>Balance: {money(doc.balanceAmount)}</p></>}<strong>Grand Total: {money(doc.grandTotal)}</strong></div>
+      {kind === 'Invoice' && <PaymentHistoryBlock payments={paymentHistory} />}
       <div className="print-meta"><div><strong>Terms</strong><p>{doc.terms}</p><p>{doc.notes}</p></div><div className="signature">Authorized Signature</div></div>
     </div>
   );
@@ -2079,18 +2165,26 @@ function printWindowWhenReady(win) {
 function renderPrintHtml(doc, data, kind) {
   const client = data.clients.find((item) => item.id === doc.clientId) || {};
   const address = splitAddress(data.settings.address).map((line) => `<span>${line}</span>`).join('');
+  const paymentRows = kind === 'Invoice'
+    ? data.payments
+      .filter((payment) => payment.invoiceId === doc.id)
+      .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
+      .map((payment) => `<p><span>${formatDate(payment.date)} - ${payment.paymentMode || 'Payment'}</span><strong>${money(payment.amount)}</strong></p>`)
+      .join('')
+    : '';
   return `<div class="sheet">
     <div class="head"><div class="logo"><img src="${data.settings.logo || DEFAULT_LOGO}" alt="Reach Design"/></div><div class="company"><h1>${data.settings.companyName || 'REACH Design'}</h1><p class="address">${address}</p><div class="contact">${data.settings.phone ? `<span><i class="fa-solid fa-phone"></i><b>Phone</b><em>${data.settings.phone}</em></span>` : ''}${data.settings.email ? `<span><i class="fa-solid fa-envelope"></i><b>Email</b><em>${data.settings.email}</em></span>` : ''}<span><i class="fa-solid fa-file-invoice"></i><b>GSTIN</b><em>${data.settings.gstNumber || 'Not provided'}</em></span></div></div></div>
     <div class="invoice-divider"></div>
     <div class="meta"><div><b>Client Details</b><p>${client.name || ''}</p><p>${client.company || ''}</p><p>${client.billingAddress || ''}</p><p>GST: ${client.gst || '-'}</p></div><div><b>${kind} Details</b><p>No: ${doc.number}</p><p>Date: ${formatDate(doc.date)}</p><p>Status: ${doc.status}</p></div></div>
     <table><thead><tr><th>Item</th><th>Qty</th><th>Rate</th><th>Discount</th><th>GST</th><th>Total</th></tr></thead><tbody>${doc.items.map((line) => `<tr><td>${line.name || ''}<br/><small>${line.description || ''}</small></td><td>${line.qty}</td><td>${money(line.rate)}</td><td>${money(line.discount)}</td><td>${percent(line.gst)}</td><td>${money(lineTotals(line).total)}</td></tr>`).join('')}</tbody></table>
-    <div class="total"><p>Subtotal: ${money(doc.subtotal)}</p><p>GST: ${money(doc.gst)}</p><p>Discount: ${money(doc.discount)}</p><h2>Grand Total: ${money(doc.grandTotal)}</h2></div>
+    <div class="total"><p>Subtotal: ${money(doc.subtotal)}</p><p>GST: ${money(doc.gst)}</p><p>Discount: ${money(doc.discount)}</p>${kind === 'Invoice' ? `<p>Paid: ${money(doc.paidAmount)}</p><p>Balance: ${money(doc.balanceAmount)}</p>` : ''}<h2>Grand Total: ${money(doc.grandTotal)}</h2></div>
+    ${kind === 'Invoice' ? `<div class="payment-history"><div><b>Payment History</b><span>${paymentRows ? 'Recorded payments' : 'No payment recorded yet'}</span></div>${paymentRows || `<p><span>Payment details will appear after received amount is saved.</span><strong>${money(0)}</strong></p>`}</div>` : ''}
     <div class="meta"><div><b>Terms</b><p>${doc.terms || ''}</p><p>${doc.notes || ''}</p></div><div class="signature">Authorized Signature</div></div>
   </div>`;
 }
 
 function printCss() {
-  return 'body{margin:0;font-family:"Google Sans","Product Sans",Inter,Arial,sans-serif;color:#202124}.sheet{max-width:980px;margin:auto;padding:34px 46px}.head{display:grid;grid-template-columns:1fr 1fr;align-items:center;gap:70px;padding:6px 8px 28px}.invoice-divider{position:relative;z-index:5;clear:both;width:100%;height:0;margin:8px 0 40px;border-top:2px solid #efb900}.logo{width:220px;height:130px;display:grid;place-items:center;justify-self:start}.logo img{display:block;width:100%;height:100%;object-fit:contain}.company{width:330px;max-width:100%;justify-self:end}.company h1{margin:0 0 12px;font-size:30px;letter-spacing:0}.company p{margin:0;color:#5f6368}.address{display:grid;gap:3px;line-height:1.45;font-size:12px}.contact{display:grid;gap:8px;margin-top:14px}.contact span{display:grid;grid-template-columns:14px 42px minmax(0,1fr);align-items:center;gap:7px;font-size:11px}.contact i{color:#9b7600;font-size:9px;text-align:center}.contact b{color:#8a6800;font-size:8px;text-transform:uppercase;letter-spacing:.7px}.contact em{min-width:0;color:#303438;font-style:normal;overflow-wrap:anywhere}.meta{display:flex;justify-content:space-between;gap:40px;margin:0 8px 38px}.meta>div:last-child{min-width:210px;text-align:right}.meta b{font-size:15px}.meta p{margin:6px 0;color:#5f6368;font-size:13px}.meta:last-of-type{align-items:flex-end;margin-top:20px}table{width:calc(100% - 16px);margin:0 8px;border-collapse:collapse}th,td{padding:12px 10px;text-align:left;border-bottom:1px solid #dfe2e5}th{background:#fff;color:#5f6368;font-size:9px;text-transform:uppercase}td{font-size:13px}td small{display:block;margin-top:3px}.total{text-align:right;margin:18px 8px 14px}.total p{margin:9px 0;font-size:13px}.total h2{margin:16px 0 0;font-size:21px}.signature{border-top:2px solid #222;align-self:flex-end;padding-top:10px;min-width:200px;text-align:center;font-size:12px}@media print{button{display:none}.sheet{padding:24px 38px}}';
+  return 'body{margin:0;font-family:"Google Sans","Product Sans",Inter,Arial,sans-serif;color:#202124}.sheet{max-width:980px;margin:auto;padding:34px 46px}.head{display:grid;grid-template-columns:1fr 1fr;align-items:center;gap:70px;padding:6px 8px 28px}.invoice-divider{position:relative;z-index:5;clear:both;width:100%;height:0;margin:8px 0 40px;border-top:2px solid #efb900}.logo{width:220px;height:130px;display:grid;place-items:center;justify-self:start}.logo img{display:block;width:100%;height:100%;object-fit:contain}.company{width:330px;max-width:100%;justify-self:end}.company h1{margin:0 0 12px;font-size:30px;letter-spacing:0}.company p{margin:0;color:#5f6368}.address{display:grid;gap:3px;line-height:1.45;font-size:12px}.contact{display:grid;gap:8px;margin-top:14px}.contact span{display:grid;grid-template-columns:14px 42px minmax(0,1fr);align-items:center;gap:7px;font-size:11px}.contact i{color:#9b7600;font-size:9px;text-align:center}.contact b{color:#8a6800;font-size:8px;text-transform:uppercase;letter-spacing:.7px}.contact em{min-width:0;color:#303438;font-style:normal;overflow-wrap:anywhere}.meta{display:flex;justify-content:space-between;gap:40px;margin:0 8px 38px}.meta>div:last-child{min-width:210px;text-align:right}.meta b{font-size:15px}.meta p{margin:6px 0;color:#5f6368;font-size:13px}.meta:last-of-type{align-items:flex-end;margin-top:20px}table{width:calc(100% - 16px);margin:0 8px;border-collapse:collapse}th,td{padding:12px 10px;text-align:left;border-bottom:1px solid #dfe2e5}th{background:#fff;color:#5f6368;font-size:9px;text-transform:uppercase}td{font-size:13px}td small{display:block;margin-top:3px}.total{text-align:right;margin:18px 8px 14px}.total p{margin:9px 0;font-size:13px}.total h2{margin:16px 0 0;font-size:21px}.signature{border-top:2px solid #222;align-self:flex-end;padding-top:10px;min-width:200px;text-align:center;font-size:12px}.payment-history{margin:18px 8px;padding:12px 14px;border:1px solid #e8e0bc;border-radius:8px;background:#fffdf4}.payment-history div{display:flex;justify-content:space-between;gap:12px;padding-bottom:6px;border-bottom:1px solid #efe6c4}.payment-history div b{font-size:13px}.payment-history div span{color:#777b7f;font-size:11px}.payment-history p{margin:7px 0 0;display:flex;justify-content:space-between;gap:14px;color:#55595d;font-size:12px}.payment-history p strong{color:#202124;white-space:nowrap}@media print{button{display:none}.sheet{padding:24px 38px}}';
 }
 
 createRoot(document.getElementById('root')).render(<App />);
