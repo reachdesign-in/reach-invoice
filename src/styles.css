@@ -250,6 +250,11 @@ tbody tr:hover { background: #fffdf3; }
 .logo-uploader { display: flex; flex-direction: column; gap: 10px; }
 .logo-uploader > div, .logo-uploader img { width: 170px; height: 130px; object-fit: contain; border: 1px dashed #cfd1d3; display: grid; place-items: center; border-radius: 7px; color: #888; }
 .logo-uploader label { width: 170px; display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 38px; border: 1px solid #dfe1e3; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; }
+.logo-uploader > .signature-uploader { width: auto; height: auto; display: grid; place-items: stretch; border: 0; margin-top: 12px; color: inherit; }
+.signature-uploader { display: grid; gap: 10px; }
+.logo-uploader .signature-uploader > div { width: 170px; height: 82px; padding: 8px; background: #fffdf4; border: 1px dashed #d8c26b; }
+.signature-uploader img { width: 100%; height: 100%; object-fit: contain; border: 0; }
+.signature-uploader span { color: #8a8f98; font-size: 12px; }
 
 .print-sheet { max-width: 1040px; margin: 0 auto; padding: 24px 18px 12px; }
 .print-head { display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: 60px; padding: 8px 8px 28px; }
@@ -272,6 +277,8 @@ tbody tr:hover { background: #fffdf3; }
 .print-total { text-align: right; margin: 20px 8px 18px; }
 .print-total p { margin: 5px 0; }
 .signature { min-width: 190px; border-top: 1px solid #222; align-self: flex-end; padding-top: 8px; text-align: center; font-size: 12px; }
+.signature img { display: block; width: 170px; max-height: 58px; object-fit: contain; margin: -70px auto 10px; }
+.signature span { display: block; }
 .toast { position: fixed; right: 24px; bottom: 24px; z-index: 200; display: flex; align-items: center; gap: 8px; background: #1f2225; color: #fff; padding: 12px 16px; border-radius: 7px; box-shadow: 0 14px 30px rgba(0,0,0,.22); font-size: 13px; }
 .scrim { display: none; }
 

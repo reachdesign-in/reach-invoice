@@ -1616,10 +1616,10 @@ function CompanySettings({ ctx }) {
     ['companyName', 'Company Name'], ['phone', 'Phone'], ['email', 'Email'], ['address', 'Address', 'textarea'], ['gstNumber', 'GST Number'],
     ['bankDetails', 'Bank Details', 'textarea'], ['upiId', 'UPI ID'], ['invoicePrefix', 'Invoice Prefix'], ['quotationPrefix', 'Quotation Prefix'], ['terms', 'Default Terms and Conditions', 'textarea']
   ];
-  const uploadLogo = (file) => {
+  const uploadImage = (key, file) => {
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = () => setForm((current) => ({ ...current, logo: reader.result }));
+    reader.onload = () => setForm((current) => ({ ...current, [key]: reader.result }));
     reader.readAsDataURL(file);
   };
   return (
@@ -1628,7 +1628,11 @@ function CompanySettings({ ctx }) {
         <div className="settings-layout">
           <div className="logo-uploader">
             <img src={form.logo || DEFAULT_LOGO} alt="Company logo" />
-            <label>Upload Logo<input type="file" accept="image/*" onChange={(e) => uploadLogo(e.target.files[0])} /></label>
+            <label>Upload Logo<input type="file" accept="image/*" onChange={(e) => uploadImage('logo', e.target.files[0])} /></label>
+            <div className="signature-uploader">
+              <div>{form.signature ? <img src={form.signature} alt="Invoice signature" /> : <span>Signature preview</span>}</div>
+              <label>Upload Signature<input type="file" accept="image/*" onChange={(e) => uploadImage('signature', e.target.files[0])} /></label>
+            </div>
           </div>
           <div className="form-grid">
             {fields.map(([key, label, type]) => <Field key={key} label={label} type={type || 'text'} value={form[key]} onChange={(v) => setForm({ ...form, [key]: v })} />)}
@@ -1929,7 +1933,7 @@ function DocumentPreview({ doc, data, kind }) {
       <table className="print-table"><thead><tr><th>Item</th><th>Qty</th><th>Rate</th><th>Discount</th><th>GST</th><th>Total</th></tr></thead><tbody>{doc.items.map((line) => <tr key={line.id}><td>{line.name || line.description}<small>{line.description}</small></td><td>{line.qty}</td><td>{money(line.rate)}</td><td>{money(line.discount)}</td><td>{percent(line.gst)}</td><td>{money(lineTotals(line).total)}</td></tr>)}</tbody></table>
       <div className="print-total"><p>Subtotal: {money(doc.subtotal)}</p><p>GST: {money(doc.gst)}</p><p>Discount: {money(doc.discount)}</p>{kind === 'Invoice' && <><p>Paid: {money(doc.paidAmount)}</p><p>Balance: {money(doc.balanceAmount)}</p></>}<strong>Grand Total: {money(doc.grandTotal)}</strong></div>
       {kind === 'Invoice' && <PaymentHistoryBlock payments={paymentHistory} />}
-      <div className="print-meta"><div><strong>Terms</strong><p>{doc.terms}</p><p>{doc.notes}</p></div><div className="signature">Authorized Signature</div></div>
+      <div className="print-meta"><div><strong>Terms</strong><p>{doc.terms}</p><p>{doc.notes}</p></div><div className="signature">{data.settings.signature && <img src={data.settings.signature} alt="Authorized signature" />}<span>Authorized Signature</span></div></div>
     </div>
   );
 }
@@ -1982,6 +1986,7 @@ async function createDocumentImageBlob(doc, data, kind) {
   ctx.textBaseline = 'top';
 
   const logo = await loadCanvasImage(data.settings.logo || DEFAULT_LOGO).catch(() => null);
+  const signature = data.settings.signature ? await loadCanvasImage(data.settings.signature).catch(() => null) : null;
   if (logo) {
     drawContainImage(ctx, logo, pad, 82, 260, 135);
   }
@@ -2059,6 +2064,7 @@ async function createDocumentImageBlob(doc, data, kind) {
   drawText(ctx, 'Terms', pad, 1245, 420, 22, 800, '#202124');
   drawText(ctx, doc.terms || '', pad, 1282, 520, 16, 500, '#5f6368', 3);
   if (doc.notes) drawText(ctx, doc.notes, pad, 1360, 520, 15, 500, '#777777', 2);
+  if (signature) drawContainImage(ctx, signature, 690, 1250, 310, 70);
   ctx.strokeStyle = '#222222';
   ctx.lineWidth = 2;
   ctx.beginPath();
@@ -2158,12 +2164,12 @@ function renderPrintHtml(doc, data, kind) {
     <table><thead><tr><th>Item</th><th>Qty</th><th>Rate</th><th>Discount</th><th>GST</th><th>Total</th></tr></thead><tbody>${doc.items.map((line) => `<tr><td>${line.name || ''}<br/><small>${line.description || ''}</small></td><td>${line.qty}</td><td>${money(line.rate)}</td><td>${money(line.discount)}</td><td>${percent(line.gst)}</td><td>${money(lineTotals(line).total)}</td></tr>`).join('')}</tbody></table>
     <div class="total"><p>Subtotal: ${money(doc.subtotal)}</p><p>GST: ${money(doc.gst)}</p><p>Discount: ${money(doc.discount)}</p>${kind === 'Invoice' ? `<p>Paid: ${money(doc.paidAmount)}</p><p>Balance: ${money(doc.balanceAmount)}</p>` : ''}<h2>Grand Total: ${money(doc.grandTotal)}</h2></div>
     ${kind === 'Invoice' ? `<div class="payment-history"><div><b>Payment History</b><span>${paymentRows ? 'Recorded payments' : 'No payment recorded yet'}</span></div>${paymentRows || `<p><span>Payment details will appear after received amount is saved.</span><strong>${money(0)}</strong></p>`}</div>` : ''}
-    <div class="meta"><div><b>Terms</b><p>${doc.terms || ''}</p><p>${doc.notes || ''}</p></div><div class="signature">Authorized Signature</div></div>
+    <div class="meta"><div><b>Terms</b><p>${doc.terms || ''}</p><p>${doc.notes || ''}</p></div><div class="signature">${data.settings.signature ? `<img src="${data.settings.signature}" alt="Authorized signature"/>` : ''}<span>Authorized Signature</span></div></div>
   </div>`;
 }
 
 function printCss() {
-  return 'body{margin:0;font-family:"Google Sans","Product Sans",Inter,Arial,sans-serif;color:#202124}.sheet{max-width:980px;margin:auto;padding:34px 46px}.head{display:grid;grid-template-columns:1fr 1fr;align-items:center;gap:70px;padding:6px 8px 28px}.invoice-divider{position:relative;z-index:5;clear:both;width:100%;height:0;margin:8px 0 40px;border-top:2px solid #efb900}.logo{width:220px;height:130px;display:grid;place-items:center;justify-self:start}.logo img{display:block;width:100%;height:100%;object-fit:contain}.company{width:330px;max-width:100%;justify-self:end}.company h1{margin:0 0 12px;font-size:30px;letter-spacing:0}.company p{margin:0;color:#5f6368}.address{display:grid;gap:3px;line-height:1.45;font-size:12px}.contact{display:grid;gap:8px;margin-top:14px}.contact span{display:grid;grid-template-columns:14px 42px minmax(0,1fr);align-items:center;gap:7px;font-size:11px}.contact i{color:#9b7600;font-size:9px;text-align:center}.contact b{color:#8a6800;font-size:8px;text-transform:uppercase;letter-spacing:.7px}.contact em{min-width:0;color:#303438;font-style:normal;overflow-wrap:anywhere}.meta{display:flex;justify-content:space-between;gap:40px;margin:0 8px 38px}.meta>div:last-child{min-width:210px;text-align:right}.meta b{font-size:15px}.meta p{margin:6px 0;color:#5f6368;font-size:13px}.meta:last-of-type{align-items:flex-end;margin-top:20px}table{width:calc(100% - 16px);margin:0 8px;border-collapse:collapse}th,td{padding:12px 10px;text-align:left;border-bottom:1px solid #dfe2e5}th{background:#fff;color:#5f6368;font-size:9px;text-transform:uppercase}td{font-size:13px}td small{display:block;margin-top:3px}.total{text-align:right;margin:18px 8px 14px}.total p{margin:9px 0;font-size:13px}.total h2{margin:16px 0 0;font-size:21px}.signature{border-top:2px solid #222;align-self:flex-end;padding-top:10px;min-width:200px;text-align:center;font-size:12px}.payment-history{margin:18px 8px;padding:12px 14px;border:1px solid #e8e0bc;border-radius:8px;background:#fffdf4}.payment-history div{display:flex;justify-content:space-between;gap:12px;padding-bottom:6px;border-bottom:1px solid #efe6c4}.payment-history div b{font-size:13px}.payment-history div span{color:#777b7f;font-size:11px}.payment-history p{margin:7px 0 0;display:flex;justify-content:space-between;gap:14px;color:#55595d;font-size:12px}.payment-history p strong{color:#202124;white-space:nowrap}@media print{button{display:none}.sheet{padding:24px 38px}}';
+  return 'body{margin:0;font-family:"Google Sans","Product Sans",Inter,Arial,sans-serif;color:#202124}.sheet{max-width:980px;margin:auto;padding:34px 46px}.head{display:grid;grid-template-columns:1fr 1fr;align-items:center;gap:70px;padding:6px 8px 28px}.invoice-divider{position:relative;z-index:5;clear:both;width:100%;height:0;margin:8px 0 40px;border-top:2px solid #efb900}.logo{width:220px;height:130px;display:grid;place-items:center;justify-self:start}.logo img{display:block;width:100%;height:100%;object-fit:contain}.company{width:330px;max-width:100%;justify-self:end}.company h1{margin:0 0 12px;font-size:30px;letter-spacing:0}.company p{margin:0;color:#5f6368}.address{display:grid;gap:3px;line-height:1.45;font-size:12px}.contact{display:grid;gap:8px;margin-top:14px}.contact span{display:grid;grid-template-columns:14px 42px minmax(0,1fr);align-items:center;gap:7px;font-size:11px}.contact i{color:#9b7600;font-size:9px;text-align:center}.contact b{color:#8a6800;font-size:8px;text-transform:uppercase;letter-spacing:.7px}.contact em{min-width:0;color:#303438;font-style:normal;overflow-wrap:anywhere}.meta{display:flex;justify-content:space-between;gap:40px;margin:0 8px 38px}.meta>div:last-child{min-width:210px;text-align:right}.meta b{font-size:15px}.meta p{margin:6px 0;color:#5f6368;font-size:13px}.meta:last-of-type{align-items:flex-end;margin-top:20px}table{width:calc(100% - 16px);margin:0 8px;border-collapse:collapse}th,td{padding:12px 10px;text-align:left;border-bottom:1px solid #dfe2e5}th{background:#fff;color:#5f6368;font-size:9px;text-transform:uppercase}td{font-size:13px}td small{display:block;margin-top:3px}.total{text-align:right;margin:18px 8px 14px}.total p{margin:9px 0;font-size:13px}.total h2{margin:16px 0 0;font-size:21px}.signature{border-top:2px solid #222;align-self:flex-end;padding-top:10px;min-width:200px;text-align:center;font-size:12px}.signature img{display:block;width:170px;max-height:58px;object-fit:contain;margin:-72px auto 10px}.signature span{display:block}.payment-history{margin:18px 8px;padding:12px 14px;border:1px solid #e8e0bc;border-radius:8px;background:#fffdf4}.payment-history div{display:flex;justify-content:space-between;gap:12px;padding-bottom:6px;border-bottom:1px solid #efe6c4}.payment-history div b{font-size:13px}.payment-history div span{color:#777b7f;font-size:11px}.payment-history p{margin:7px 0 0;display:flex;justify-content:space-between;gap:14px;color:#55595d;font-size:12px}.payment-history p strong{color:#202124;white-space:nowrap}@media print{button{display:none}.sheet{padding:24px 38px}}';
 }
 
 createRoot(document.getElementById('root')).render(<App />);
