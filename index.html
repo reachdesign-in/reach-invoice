@@ -95,6 +95,7 @@ const formatDate = (value) => {
   const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
   return match ? `${match[3]}-${match[2]}-${match[1]}` : value || '-';
 };
+const toInputDate = (value) => String(value || '').slice(0, 10);
 const formatDateTime = (value) => {
   if (!value) return '-';
   const date = new Date(value);
@@ -171,6 +172,7 @@ const navItems = [
   ['reports', 'Reports', BarChart3],
   ['export', 'Export', FileDown],
   ['trash', 'Trash', Trash2],
+  ['admin', 'Admin', Settings],
   ['settings', 'Settings', Settings]
 ];
 
@@ -338,6 +340,19 @@ function App() {
     else localStorage.removeItem('reachInvoiceAuth');
   };
 
+  React.useEffect(() => {
+    if (!auth?.token) return;
+    apiRequest('/api/me', { token: auth.token })
+      .then(({ user }) => {
+        const nextAuth = { ...auth, user };
+        setAuth(nextAuth);
+        localStorage.setItem('reachInvoiceAuth', JSON.stringify(nextAuth));
+      })
+      .catch((error) => {
+        if (error.message === 'Unauthorized') saveAuth(null);
+      });
+  }, [auth?.token]);
+
   const confirmAction = React.useCallback((config) => setConfirmDialog(config), []);
 
   React.useEffect(() => {
@@ -496,6 +511,7 @@ function App() {
   };
 
   const context = { data, setters, notify, addActivity, navigate, importCloudBackup, openTarget, setOpenTarget, moveToTrash };
+  const visibleNavItems = auth.user?.isPlatformAdmin ? navItems : navItems.filter(([id]) => id !== 'admin');
   const screens = {
     dashboard: <Dashboard ctx={context} />,
     clients: <Clients ctx={context} />,
@@ -509,6 +525,7 @@ function App() {
     reports: <Reports ctx={context} />,
     export: <ExportImport ctx={context} resetData={resetData} />,
     trash: <TrashSection ctx={context} />,
+    admin: auth.user?.isPlatformAdmin ? <AdminPanel auth={auth} notify={notify} /> : <Dashboard ctx={context} />,
     settings: <CompanySettings ctx={context} />
   };
 
@@ -522,7 +539,7 @@ function App() {
           </div>
         </div>
         <nav>
-          {navItems.map(([id, label]) => (
+          {visibleNavItems.map(([id, label]) => (
             <button className={active === id ? 'active' : ''} key={id} onClick={() => navigate(id)}>
               <span>{label}</span>
             </button>
@@ -1801,6 +1818,93 @@ function TrashSection({ ctx }) {
         ))}
         {!filtered.length && <Empty text={data.trash.length ? 'No trash items match your search.' : 'Trash is empty.'} />}
       </div>
+    </section>
+  );
+}
+
+function AdminPanel({ auth, notify }) {
+  const [tenants, setTenants] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [savingId, setSavingId] = React.useState('');
+  const statuses = ['trial', 'active', 'suspended', 'disabled', 'expired'];
+  const plans = ['trial', 'basic', 'pro', 'enterprise'];
+
+  const loadTenants = React.useCallback(() => {
+    setLoading(true);
+    apiRequest('/api/admin/tenants', { token: auth.token })
+      .then((result) => setTenants(result.tenants || []))
+      .catch((error) => notify(error.message))
+      .finally(() => setLoading(false));
+  }, [auth.token, notify]);
+
+  React.useEffect(() => {
+    loadTenants();
+  }, [loadTenants]);
+
+  const updateTenant = (tenant, patch) => {
+    const nextTenant = { ...tenant, ...patch };
+    setTenants((rows) => rows.map((row) => row.id === tenant.id ? nextTenant : row));
+    setSavingId(tenant.id);
+    apiRequest(`/api/admin/tenants/${tenant.id}`, {
+      method: 'PATCH',
+      token: auth.token,
+      body: {
+        status: nextTenant.status,
+        plan: nextTenant.plan,
+        trialEndsAt: nextTenant.trial_ends_at,
+        subscriptionEndsAt: nextTenant.subscription_ends_at
+      }
+    })
+      .then((result) => {
+        setTenants((rows) => rows.map((row) => row.id === tenant.id ? { ...row, ...result.tenant } : row));
+        notify('Customer workspace updated');
+      })
+      .catch((error) => {
+        notify(error.message);
+        loadTenants();
+      })
+      .finally(() => setSavingId(''));
+  };
+
+  return (
+    <section className="page">
+      <Panel title="Customer Workspaces">
+        <p className="admin-note">Each signup gets a separate private workspace. Use this area to manage trials, paid plans, and blocked accounts.</p>
+        {loading ? <Empty text="Loading customer workspaces..." /> : (
+          <div className="admin-tenant-list">
+            {tenants.map((tenant) => (
+              <article className="admin-tenant-card" key={tenant.id}>
+                <div className="admin-tenant-main">
+                  <strong>{tenant.name}</strong>
+                  <span>{tenant.owner_email || 'No owner email'}</span>
+                  <small>{tenant.record_count || 0} records - Created {formatDate(String(tenant.created_at || '').slice(0, 10))}</small>
+                </div>
+                <label>
+                  Status
+                  <select value={tenant.status} disabled={savingId === tenant.id} onChange={(e) => updateTenant(tenant, { status: e.target.value })}>
+                    {statuses.map((status) => <option key={status} value={status}>{status}</option>)}
+                  </select>
+                </label>
+                <label>
+                  Plan
+                  <select value={tenant.plan} disabled={savingId === tenant.id} onChange={(e) => updateTenant(tenant, { plan: e.target.value })}>
+                    {plans.map((plan) => <option key={plan} value={plan}>{plan}</option>)}
+                  </select>
+                </label>
+                <label>
+                  Trial Ends
+                  <input type="date" value={toInputDate(tenant.trial_ends_at)} disabled={savingId === tenant.id} onChange={(e) => updateTenant(tenant, { trial_ends_at: e.target.value })} />
+                </label>
+                <label>
+                  Subscription Ends
+                  <input type="date" value={toInputDate(tenant.subscription_ends_at)} disabled={savingId === tenant.id} onChange={(e) => updateTenant(tenant, { subscription_ends_at: e.target.value || null })} />
+                </label>
+              </article>
+            ))}
+            {!tenants.length && <Empty text="No customer workspaces yet." />}
+          </div>
+        )}
+      </Panel>
     </section>
   );
 }
