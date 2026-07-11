@@ -1137,7 +1137,7 @@ function Documents({ ctx, kind }) {
                   <button onClick={() => setModal({ ...row, _editing: true })}>Edit</button>
                   {!isInvoice && <button onClick={() => duplicateQuote(row)}>Duplicate</button>}
                   {!isInvoice && <button onClick={() => convertToInvoice(row)}>Make Invoice</button>}
-                  <button onClick={() => printDocument(row, data, isInvoice ? 'Invoice' : 'Quotation')}>Print</button>
+                  <button onClick={() => printDocument(row, data, isInvoice ? 'Invoice' : 'Quotation', notify)}>Print</button>
                   <button onClick={() => shareDocumentFile(row, data, isInvoice ? 'Invoice' : 'Quotation', notify)}>Share</button>
                   <button className="danger" onClick={() => remove(setRows, row.id, notify, `${isInvoice ? 'Invoice' : 'Quotation'} deleted`)}>Delete</button>
                 </td>
@@ -1145,6 +1145,31 @@ function Documents({ ctx, kind }) {
             ))}
           </tbody>
         </table>
+        <div className="mobile-doc-cards">
+          {filtered.map((row) => (
+            <article className="mobile-doc-card" key={`mobile-${row.id}`}>
+              <div className="mobile-doc-head">
+                <strong>{row.number}</strong>
+                <Badge text={row.status} />
+              </div>
+              <div className="mobile-doc-meta">
+                <span><b>Date</b>{formatDate(row.date)}</span>
+                <span><b>Client</b>{clientName(row.clientId)}</span>
+                <span><b>Total</b>{money(row.grandTotal)}</span>
+                {isInvoice && <span><b>Balance</b>{money(row.balanceAmount)}</span>}
+              </div>
+              <div className="mobile-doc-actions">
+                <button onClick={() => setView(row)}>View</button>
+                <button onClick={() => setModal({ ...row, _editing: true })}>Edit</button>
+                {!isInvoice && <button onClick={() => duplicateQuote(row)}>Duplicate</button>}
+                {!isInvoice && <button onClick={() => convertToInvoice(row)}>Make Invoice</button>}
+                <button onClick={() => printDocument(row, data, isInvoice ? 'Invoice' : 'Quotation', notify)}>Print</button>
+                <button onClick={() => shareDocumentFile(row, data, isInvoice ? 'Invoice' : 'Quotation', notify)}>Share</button>
+                <button className="danger" onClick={() => remove(setRows, row.id, notify, `${isInvoice ? 'Invoice' : 'Quotation'} deleted`)}>Delete</button>
+              </div>
+            </article>
+          ))}
+        </div>
         {!filtered.length && <Empty text={`No ${isInvoice ? 'invoices' : 'quotations'} found.`} />}
       </div>
       {modal && <DocumentModal isInvoice={isInvoice} doc={modal} setDoc={setModal} data={data} onClose={() => setModal(null)} onSave={saveDoc} />}
@@ -1978,19 +2003,33 @@ function DocumentPreview({ doc, data, kind }) {
   );
 }
 
-function printDocument(doc, data, kind) {
+function printDocument(doc, data, kind, notify = () => {}) {
+  if (window.ReachInvoiceAndroid?.shareImage) {
+    shareDocumentFile(doc, data, kind, notify, { fromPrint: true });
+    return;
+  }
   const win = window.open('', '_blank');
+  if (!win) {
+    notify('Popup blocked. Use Share to send invoice image.');
+    return;
+  }
   const icons = new URL('./src/vendor/fontawesome/css/all.min.css', window.location.href).href;
   win.document.write(`<!doctype html><html><head><title>${kind} ${doc.number}</title><link rel="stylesheet" href="${icons}"><style>${printCss()}</style></head><body>${renderPrintHtml(doc, data, kind)}</body></html>`);
   win.document.close();
   printWindowWhenReady(win);
 }
 
-async function shareDocumentFile(doc, data, kind, notify) {
+async function shareDocumentFile(doc, data, kind, notify, options = {}) {
   try {
-    notify(`Preparing ${kind.toLowerCase()} image...`);
+    notify(options.fromPrint ? `Preparing ${kind.toLowerCase()} for print/share...` : `Preparing ${kind.toLowerCase()} image...`);
     const blob = await createDocumentImageBlob(doc, data, kind);
     const filename = `${kind} ${doc.number}.png`;
+    if (window.ReachInvoiceAndroid?.shareImage) {
+      const dataUrl = await blobToDataUrl(blob);
+      window.ReachInvoiceAndroid.shareImage(dataUrl, filename, `${kind} ${doc.number} - ${money(doc.grandTotal)}`);
+      notify(options.fromPrint ? `${kind} image ready` : `${kind} image shared`);
+      return;
+    }
     const file = new File([blob], filename, { type: 'image/png' });
     if (navigator.canShare?.({ files: [file] })) {
       await navigator.share({
@@ -2011,6 +2050,15 @@ async function shareDocumentFile(doc, data, kind, notify) {
   } catch (error) {
     shareText(`${kind} ${doc.number}: ${money(doc.grandTotal)}`, notify);
   }
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
 }
 
 async function createDocumentImageBlob(doc, data, kind) {
