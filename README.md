@@ -32,6 +32,7 @@ The original UI/UX is preserved. The app now adds login, company-level data sepa
 DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/DATABASE
 DATABASE_SSL=true
 JWT_SECRET=use-a-long-random-secret
+ADMIN_EMAILS=your-admin-email@example.com
 PORT=3000
 ```
 
@@ -70,6 +71,29 @@ That creates:
 - Your private company settings
 
 No user can access another company workspace because every API route is protected by the logged-in company ID.
+
+## SaaS / Selling Mode
+
+Every signup creates a separate company workspace in `organizations`.
+All app data is saved with that workspace's `organization_id`, so one customer cannot see another customer's clients, invoices, payments, settings, trash, or reports.
+
+Set your owner email in `.env`:
+
+```env
+ADMIN_EMAILS=you@yourdomain.com
+```
+
+When you login with that email, the app shows an **Admin** section where you can view customer workspaces, see their owner email, record count, trial/plan, and change account status.
+
+Account statuses:
+
+- `trial`: new signup, default 14-day trial
+- `active`: paid/approved customer
+- `suspended`: temporarily blocked
+- `disabled`: manually blocked
+- `expired`: expired account
+
+Normal users do not see the Admin section.
 
 ## Import Old Offline Data
 
