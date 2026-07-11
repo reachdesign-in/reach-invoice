@@ -7,6 +7,7 @@
 
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 320px; min-height: 100vh; }
+body.modal-open { position: fixed; width: 100%; overflow: hidden; }
 button, input, select, textarea { font: inherit; }
 button { border: 0; cursor: pointer; }
 
@@ -183,7 +184,7 @@ tbody tr:hover { background: #fffdf3; }
 .badge.sent, .badge.partially-paid, .badge.client-review { background: #fff2c4; color: #765a00; }
 
 .modal-backdrop { position: fixed; inset: 0; background: rgba(17, 18, 19, .5); z-index: 100; padding: 24px; display: grid; place-items: center; }
-.modal { width: min(600px, 100%); max-height: calc(100vh - 48px); overflow-y: auto; background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 24px 70px rgba(0,0,0,.22); }
+.modal { width: min(600px, 100%); max-height: calc(100vh - 48px); overflow-y: auto; overscroll-behavior: contain; background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 24px 70px rgba(0,0,0,.22); }
 .modal.wide { width: min(1100px, 100%); }
 .modal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
 .modal-head h2 { margin: 0; font-size: 19px; }
@@ -246,6 +247,14 @@ tbody tr:hover { background: #fffdf3; }
 .calculator-actions button:disabled { opacity: .45; cursor: not-allowed; transform: none; filter: none; }
 .export-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .export-grid button, .export-grid .upload-btn { min-height: 58px; background: #fff; border: 1px solid #dfe1e3; justify-content: flex-start; }
+.trash-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+.trash-toolbar .search { flex: 1; }
+.trash-list { display: grid; gap: 10px; }
+.trash-card { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px; background: #fff; border: 1px solid #e5e7e9; border-radius: 8px; box-shadow: 0 4px 14px rgba(25,25,25,.035); }
+.trash-card > div:first-child { display: grid; gap: 4px; min-width: 0; }
+.trash-card strong { font-size: 15px; }
+.trash-card span, .trash-card small { color: #73777b; font-size: 12px; }
+.trash-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .upload-btn input, .logo-uploader input { display: none; }
 .settings-layout { display: grid; grid-template-columns: 190px 1fr; gap: 24px; }
 .logo-uploader { display: flex; flex-direction: column; gap: 10px; }
@@ -343,6 +352,9 @@ tbody tr:hover { background: #fffdf3; }
   .quickbar button { width: 100%; min-height: 38px; padding: 0 8px; font-size: 12px; }
   .quickbar button:last-child:nth-child(odd) { grid-column: 1 / -1; }
   .export-grid { grid-template-columns: 1fr; }
+  .trash-toolbar, .trash-card { align-items: stretch; flex-direction: column; }
+  .trash-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .trash-actions button { width: 100%; }
   .summary-strip { flex-direction: column; }
   .report-modes { width: 100%; }
   .report-modes button { flex: 1; padding: 0 8px; }

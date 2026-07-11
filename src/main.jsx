@@ -60,7 +60,8 @@ const STORAGE_KEYS = [
   'projects',
   'expenses',
   'companySettings',
-  'activities'
+  'activities',
+  'trash'
 ];
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -148,6 +149,7 @@ const navItems = [
   ['expenses', 'Expenses', ShoppingBag],
   ['reports', 'Reports', BarChart3],
   ['export', 'Export', FileDown],
+  ['trash', 'Trash', Trash2],
   ['settings', 'Settings', Settings]
 ];
 
@@ -289,6 +291,7 @@ function App() {
   const [expenses, setExpenses] = React.useState([]);
   const [settings, setSettings] = React.useState(emptySettings);
   const [activities, setActivities] = React.useState([]);
+  const [trash, setTrash] = React.useState([]);
 
   const applyCloudState = (state = {}) => {
     setSyncPaused(true);
@@ -301,6 +304,7 @@ function App() {
     setExpenses(state.expenses || []);
     setSettings({ ...emptySettings, ...(state.companySettings || {}) });
     setActivities(state.activities || []);
+    setTrash(state.trash || []);
     window.setTimeout(() => {
       setHydrated(true);
       setSyncPaused(false);
@@ -338,8 +342,8 @@ function App() {
     ]);
   }, [hydrated]);
 
-  const data = { clients, services, quotations, invoices, payments, projects, expenses, settings, activities };
-  const setters = { setClients, setServices, setQuotations, setInvoices, setPayments, setProjects, setExpenses, setSettings, setActivities };
+  const data = { clients, services, quotations, invoices, payments, projects, expenses, settings, activities, trash };
+  const setters = { setClients, setServices, setQuotations, setInvoices, setPayments, setProjects, setExpenses, setSettings, setActivities, setTrash };
 
   const notify = (message) => {
     setToast(message);
@@ -395,6 +399,7 @@ function App() {
   React.useEffect(() => queueSync('expenses', expenses), [expenses]);
   React.useEffect(() => queueSync('companySettings', settings), [settings]);
   React.useEffect(() => queueSync('activities', activities), [activities]);
+  React.useEffect(() => queueSync('trash', trash), [trash]);
 
   const addActivity = (text) => setActivities((items) => [{ id: uid(), date: new Date().toISOString(), text }, ...items].slice(0, 80));
 
@@ -421,6 +426,7 @@ function App() {
         setExpenses([]);
         setSettings(emptySettings);
         setActivities([]);
+        setTrash([]);
         apiRequest('/api/app-state/reset', { method: 'POST', token: auth.token, body: {} }).catch((error) => notify(error.message));
         notify('Cloud data reset');
       }
@@ -454,7 +460,21 @@ function App() {
     return <div className="loading-screen">Loading REACH INVOICE cloud data...</div>;
   }
 
-  const context = { data, setters, notify, addActivity, navigate, importCloudBackup, openTarget, setOpenTarget };
+  const moveToTrash = ({ collection, label, record, related = [] }) => {
+    const entry = {
+      id: uid(),
+      collection,
+      label,
+      record,
+      related,
+      title: trashTitle(record, label),
+      deletedAt: new Date().toISOString()
+    };
+    setTrash((items) => [entry, ...items].slice(0, 500));
+    addActivity(`Moved ${label.toLowerCase()} ${entry.title} to trash`);
+  };
+
+  const context = { data, setters, notify, addActivity, navigate, importCloudBackup, openTarget, setOpenTarget, moveToTrash };
   const screens = {
     dashboard: <Dashboard ctx={context} />,
     clients: <Clients ctx={context} />,
@@ -467,6 +487,7 @@ function App() {
     expenses: <Expenses ctx={context} />,
     reports: <Reports ctx={context} />,
     export: <ExportImport ctx={context} resetData={resetData} />,
+    trash: <TrashSection ctx={context} />,
     settings: <CompanySettings ctx={context} />
   };
 
@@ -891,7 +912,7 @@ function PreviewRows({ rows, empty, render, onRowClick }) {
 }
 
 function Clients({ ctx }) {
-  const { data, setters, notify, addActivity } = ctx;
+  const { data, setters, notify, addActivity, moveToTrash } = ctx;
   const fields = [
     ['name', 'text', true], ['company', 'text'], ['mobile', 'tel'], ['email', 'email'], ['gst', 'text'],
     ['billingAddress', 'textarea'], ['shippingAddress', 'textarea'], ['city', 'text'], ['state', 'text'], ['pin', 'text'], ['notes', 'textarea']
@@ -913,7 +934,14 @@ function Clients({ ctx }) {
       getStatus={(row) => row.state}
       fields={fields}
       onSave={save}
-      onDelete={(id) => remove(setters.setClients, id, notify, 'Client deleted')}
+      onDelete={(row) => removeRecord({
+        collection: 'clients',
+        label: 'Client',
+        record: row,
+        setter: setters.setClients,
+        notify,
+        moveToTrash
+      })}
       detail={(client) => <ClientDetail client={client} data={data} />}
     />
   );
@@ -939,7 +967,7 @@ function ClientDetail({ client, data }) {
 }
 
 function Services({ ctx }) {
-  const { data, setters, notify, addActivity } = ctx;
+  const { data, setters, notify, addActivity, moveToTrash } = ctx;
   const fields = [
     ['name', 'text', true, null, 'Service Name'], ['category', 'text', true, null, 'Service Category'],
     ['description', 'textarea', false, null, 'Description'], ['hsn', 'text', false, null, 'HSN/SAC Code'],
@@ -963,7 +991,14 @@ function Services({ ctx }) {
         notify(record._editing ? 'Service updated' : 'Service added');
         addActivity(`${record._editing ? 'Updated' : 'Added'} service ${record.name}`);
       }}
-      onDelete={(id) => remove(setters.setServices, id, notify, 'Service deleted')}
+      onDelete={(row) => removeRecord({
+        collection: 'services',
+        label: 'Service',
+        record: row,
+        setter: setters.setServices,
+        notify,
+        moveToTrash
+      })}
       detail={(row) => <div className="detail-grid"><Info label="Description" value={row.description} /><Info label="HSN/SAC" value={row.hsn} /></div>}
     />
   );
@@ -978,7 +1013,7 @@ function Invoices({ ctx }) {
 }
 
 function Documents({ ctx, kind }) {
-  const { data, setters, notify, addActivity, openTarget, setOpenTarget } = ctx;
+  const { data, setters, notify, addActivity, openTarget, setOpenTarget, moveToTrash } = ctx;
   const isInvoice = kind === 'invoice';
   const rows = isInvoice ? data.invoices : data.quotations;
   const setRows = isInvoice ? setters.setInvoices : setters.setQuotations;
@@ -1074,6 +1109,17 @@ function Documents({ ctx, kind }) {
     notify('Quotation duplicated');
   };
 
+  const deleteDocument = (row) => removeRecord({
+    collection: isInvoice ? 'invoices' : 'quotations',
+    label: isInvoice ? 'Invoice' : 'Quotation',
+    record: row,
+    setter: setRows,
+    notify,
+    moveToTrash,
+    afterDelete: isInvoice ? () => setters.setPayments((items) => items.filter((payment) => payment.invoiceId !== row.id)) : null,
+    related: isInvoice ? data.payments.filter((payment) => payment.invoiceId === row.id).map((payment) => ({ collection: 'payments', label: 'Payment', record: payment })) : []
+  });
+
   return (
     <section className="page">
       <Toolbar
@@ -1118,7 +1164,7 @@ function Documents({ ctx, kind }) {
                   {!isInvoice && <button onClick={() => convertToInvoice(row)}>Make Invoice</button>}
                   <button onClick={() => printDocument(row, data, isInvoice ? 'Invoice' : 'Quotation', notify)}>Print</button>
                   <button onClick={() => shareDocumentFile(row, data, isInvoice ? 'Invoice' : 'Quotation', notify)}>Share</button>
-                  <button className="danger" onClick={() => remove(setRows, row.id, notify, `${isInvoice ? 'Invoice' : 'Quotation'} deleted`)}>Delete</button>
+                  <button className="danger" onClick={() => deleteDocument(row)}>Delete</button>
                 </td>
               </tr>
             ))}
@@ -1144,7 +1190,7 @@ function Documents({ ctx, kind }) {
                 {!isInvoice && <button onClick={() => convertToInvoice(row)}>Make Invoice</button>}
                 <button onClick={() => printDocument(row, data, isInvoice ? 'Invoice' : 'Quotation', notify)}>Print</button>
                 <button onClick={() => shareDocumentFile(row, data, isInvoice ? 'Invoice' : 'Quotation', notify)}>Share</button>
-                <button className="danger" onClick={() => remove(setRows, row.id, notify, `${isInvoice ? 'Invoice' : 'Quotation'} deleted`)}>Delete</button>
+                <button className="danger" onClick={() => deleteDocument(row)}>Delete</button>
               </div>
             </article>
           ))}
@@ -1235,7 +1281,7 @@ function DocumentModal({ isInvoice, doc, setDoc, data, onClose, onSave }) {
 }
 
 function Payments({ ctx }) {
-  const { data, setters, notify, addActivity } = ctx;
+  const { data, setters, notify, addActivity, moveToTrash } = ctx;
   const [modal, setModal] = React.useState(null);
   const [search, setSearch] = React.useState('');
   const invoices = data.invoices;
@@ -1268,13 +1314,15 @@ function Payments({ ctx }) {
         actions={(row) => <>
           <button onClick={() => printReceipt(row, data)}>Print</button>
           <button onClick={() => setModal({ ...row, _editing: true })}>Edit</button>
-          <button onClick={() => {
-            if (!confirm('Delete this payment?')) return;
-            const nextPayments = data.payments.filter((item) => item.id !== row.id);
-            setters.setPayments(nextPayments);
-            setters.setInvoices((items) => recalculateInvoiceBalances(items, nextPayments));
-            notify('Payment deleted');
-          }} className="danger">Delete</button>
+          <button onClick={() => removeRecord({
+            collection: 'payments',
+            label: 'Payment',
+            record: row,
+            setter: setters.setPayments,
+            notify,
+            moveToTrash,
+            afterDelete: (nextPayments) => setters.setInvoices((items) => recalculateInvoiceBalances(items, nextPayments))
+          })} className="danger">Delete</button>
         </>}
       />
       {modal && <PaymentModal payment={modal} setPayment={setModal} invoices={invoices} data={data} onSave={savePayment} onClose={() => setModal(null)} />}
@@ -1304,7 +1352,7 @@ function PaymentModal({ payment, setPayment, invoices, data, onSave, onClose }) 
 }
 
 function Projects({ ctx }) {
-  const { data, setters, notify, addActivity } = ctx;
+  const { data, setters, notify, addActivity, moveToTrash } = ctx;
   const [modal, setModal] = React.useState(null);
   const fields = [
     ['projectName', 'text', true], ['clientId', 'client', true], ['projectType', 'text'], ['startDate', 'date'], ['deadline', 'date'],
@@ -1328,7 +1376,14 @@ function Projects({ ctx }) {
         notify('Project saved');
         addActivity(`Saved project ${record.projectName}`);
       }}
-      onDelete={(id) => remove(setters.setProjects, id, notify, 'Project deleted')}
+      onDelete={(row) => removeRecord({
+        collection: 'projects',
+        label: 'Project',
+        record: row,
+        setter: setters.setProjects,
+        notify,
+        moveToTrash
+      })}
       detail={(row) => <ProjectDetail row={row} data={data} onEdit={() => setModal(row)} />}
       externalModal={modal}
       setExternalModal={setModal}
@@ -1509,7 +1564,7 @@ function PrintCalculator({ ctx }) {
 }
 
 function Expenses({ ctx }) {
-  const { data, setters, notify, addActivity } = ctx;
+  const { data, setters, notify, addActivity, moveToTrash } = ctx;
   const fields = [
     ['date', 'date', true], ['vendorName', 'text', true],
     ['category', 'select', true, ['Printing Vendor', 'Material Purchase', 'Freelancer Payment', 'Hosting/Domain', 'Office Expense', 'Travel', 'Software Subscription', 'Other']],
@@ -1531,7 +1586,14 @@ function Expenses({ ctx }) {
         notify('Expense saved');
         addActivity(`Saved expense ${record.vendorName} ${money(record.amount)}`);
       }}
-      onDelete={(id) => remove(setters.setExpenses, id, notify, 'Expense deleted')}
+      onDelete={(row) => removeRecord({
+        collection: 'expenses',
+        label: 'Expense',
+        record: row,
+        setter: setters.setExpenses,
+        notify,
+        moveToTrash
+      })}
       detail={(row) => <div className="detail-grid"><Info label="Description" value={row.description} /><Info label="Bill Number" value={row.billNumber} /><Info label="Notes" value={row.notes} /></div>}
     />
   );
@@ -1633,6 +1695,95 @@ function ExportImport({ ctx, resetData }) {
   );
 }
 
+function TrashSection({ ctx }) {
+  const { data, setters, notify, addActivity } = ctx;
+  const [search, setSearch] = React.useState('');
+  const collectionSetters = {
+    clients: setters.setClients,
+    services: setters.setServices,
+    quotations: setters.setQuotations,
+    invoices: setters.setInvoices,
+    payments: setters.setPayments,
+    projects: setters.setProjects,
+    expenses: setters.setExpenses
+  };
+  const filtered = data.trash.filter((item) => `${item.label} ${item.title} ${item.collection}`.toLowerCase().includes(search.toLowerCase()));
+  const restoreRelated = (related = []) => {
+    related.forEach((item) => {
+      const setter = collectionSetters[item.collection];
+      if (setter && item.record) upsert(setter, item.record);
+    });
+  };
+  const restoreItem = (item) => {
+    const setter = collectionSetters[item.collection];
+    if (!setter || !item.record) {
+      notify('Unable to restore this item');
+      return;
+    }
+    const activeRows = data[item.collection] || [];
+    if ((item.collection === 'invoices' || item.collection === 'quotations') && activeRows.some((row) => row.id !== item.record.id && row.number === item.record.number)) {
+      notify(`Cannot restore. ${item.record.number} already exists.`);
+      return;
+    }
+    upsert(setter, item.record);
+    restoreRelated(item.related);
+    setters.setTrash((rows) => rows.filter((row) => row.id !== item.id));
+    if (item.collection === 'invoices') {
+      window.setTimeout(() => setters.setInvoices((rows) => recalculateInvoiceBalances(rows, data.payments)), 0);
+    }
+    notify(`${item.label} restored`);
+    addActivity(`Restored ${item.label.toLowerCase()} ${item.title}`);
+  };
+  const deleteForever = (item) => {
+    confirmThen({
+      title: 'Delete forever?',
+      message: `${item.title} will be permanently removed from Trash.`,
+      confirmText: 'Delete forever',
+      cancelText: 'No',
+      tone: 'danger'
+    }, () => {
+      setters.setTrash((rows) => rows.filter((row) => row.id !== item.id));
+      notify('Deleted forever');
+    });
+  };
+  const clearTrash = () => {
+    confirmThen({
+      title: 'Empty Trash?',
+      message: 'All trash items will be permanently deleted.',
+      confirmText: 'Empty Trash',
+      cancelText: 'No',
+      tone: 'danger'
+    }, () => {
+      setters.setTrash([]);
+      notify('Trash emptied');
+    });
+  };
+  return (
+    <section className="page">
+      <div className="trash-toolbar">
+        <label className="search"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search trash" /></label>
+        <button className="danger" disabled={!data.trash.length} onClick={clearTrash}>Empty Trash</button>
+      </div>
+      <div className="trash-list">
+        {filtered.map((item) => (
+          <article className="trash-card" key={item.id}>
+            <div>
+              <strong>{item.title}</strong>
+              <span>{item.label} · Deleted {formatDate(item.deletedAt?.slice(0, 10))}</span>
+              {!!item.related?.length && <small>Includes {item.related.length} related payment record{item.related.length > 1 ? 's' : ''}</small>}
+            </div>
+            <div className="trash-actions">
+              <button onClick={() => restoreItem(item)}>Restore</button>
+              <button className="danger" onClick={() => deleteForever(item)}>Delete Forever</button>
+            </div>
+          </article>
+        ))}
+        {!filtered.length && <Empty text={data.trash.length ? 'No trash items match your search.' : 'Trash is empty.'} />}
+      </div>
+    </section>
+  );
+}
+
 function CompanySettings({ ctx }) {
   const { data, setters, notify } = ctx;
   const [form, setForm] = React.useState(data.settings);
@@ -1715,7 +1866,7 @@ function CrudSection({ title, singular, rows, columns, searchKeys, getStatus, fi
         actions={(row) => <>
           <button onClick={() => setView(row)}>View</button>
           <button onClick={() => setActiveModal({ ...row, _editing: true })}>Edit</button>
-          <button className="danger" onClick={() => onDelete(row.id)}>Delete</button>
+          <button className="danger" onClick={() => onDelete(row)}>Delete</button>
         </>}
       />
       {!filtered.length && <Empty text={`No ${title.toLowerCase()} found.`} />}
@@ -1798,6 +1949,16 @@ function Field({ label, type = 'text', value, onChange, options = [], required, 
 }
 
 function Modal({ title, children, onClose, wide }) {
+  React.useEffect(() => {
+    const scrollY = window.scrollY;
+    document.body.classList.add('modal-open');
+    document.body.style.top = `-${scrollY}px`;
+    return () => {
+      document.body.classList.remove('modal-open');
+      document.body.style.top = '';
+      window.scrollTo(0, scrollY);
+    };
+  }, []);
   return (
     <div className="modal-backdrop">
       <div className={`modal ${wide ? 'wide' : ''}`}>
@@ -1877,16 +2038,26 @@ function upsert(setter, record) {
   setter((items) => items.some((item) => item.id === clean.id) ? items.map((item) => item.id === clean.id ? clean : item) : [clean, ...items]);
 }
 
-function remove(setter, id, notify, message) {
+function trashTitle(record, label = 'Record') {
+  return record?.number || record?.name || record?.projectName || record?.vendorName || record?.invoiceNumber || label;
+}
+
+function removeRecord({ collection, label, record, setter, notify, moveToTrash, related = [], afterDelete }) {
   confirmThen({
-    title: 'Delete record?',
-    message: 'Are you sure to delete this record?',
-    confirmText: 'Yes, delete',
+    title: `Move ${label.toLowerCase()} to trash?`,
+    message: `${trashTitle(record, label)} will move to Trash. You can restore it later.`,
+    confirmText: 'Yes, move',
     cancelText: 'No',
     tone: 'danger'
   }, () => {
-    setter((items) => items.filter((item) => item.id !== id));
-    notify(message);
+    let nextRows = [];
+    setter((items) => {
+      nextRows = items.filter((item) => item.id !== record.id);
+      return nextRows;
+    });
+    moveToTrash?.({ collection, label, record, related });
+    afterDelete?.(nextRows);
+    notify(`${label} moved to Trash`);
   });
 }
 
