@@ -176,6 +176,7 @@ th, td { text-align: left; padding: 13px 14px; border-bottom: 1px solid #eceef0;
 th { color: #686b70; background: #fafafa; font-size: 12px; text-transform: uppercase; font-weight: 700; }
 tbody tr:hover { background: #fffdf3; }
 .actions { display: flex; align-items: center; gap: 5px; }
+.mobile-doc-cards { display: none; }
 .badge { display: inline-flex; align-items: center; min-height: 25px; padding: 0 8px; border-radius: 5px; font-size: 11px; font-weight: 700; background: #eff1f2; color: #4a4d50; }
 .badge.paid, .badge.completed, .badge.approved { background: #e4f5e9; color: #24713a; }
 .badge.overdue, .badge.rejected, .badge.cancelled { background: #ffe9e9; color: #a43737; }
@@ -349,6 +350,18 @@ tbody tr:hover { background: #fffdf3; }
   .modal-backdrop { padding: 8px; }
   .modal { max-height: calc(100vh - 16px); padding: 15px; }
   .print-head, .print-meta { flex-direction: column; }
+  .table-wrap { overflow: visible; }
+  .table-wrap > table { display: none; }
+  .mobile-doc-cards { display: grid; gap: 10px; padding: 10px; }
+  .mobile-doc-card { display: grid; gap: 10px; padding: 13px; border: 1px solid #ece2b9; border-radius: 8px; background: #fff; box-shadow: 0 4px 12px rgba(25,25,25,.035); }
+  .mobile-doc-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .mobile-doc-head strong { font-size: 15px; }
+  .mobile-doc-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .mobile-doc-meta span { display: grid; gap: 2px; min-width: 0; color: #202124; font-size: 12px; font-weight: 700; overflow-wrap: anywhere; }
+  .mobile-doc-meta b { color: #777b7f; font-size: 9px; text-transform: uppercase; letter-spacing: .4px; }
+  .mobile-doc-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
+  .mobile-doc-actions button { min-height: 34px; padding: 0 6px; background: #f2f3f4; font-size: 11px; }
+  .mobile-doc-actions .danger { background: #fff0f0; color: #a02828; border: 1px solid #ffc9c9; }
 }
 
 @media print {
