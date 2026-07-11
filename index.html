@@ -13,6 +13,11 @@
   color: #202124;
   background: #f6f7f8;
   font-synthesis: none;
+  --primary: #f3c910;
+  --primary-text: #181818;
+  --primary-soft: #fff4bd;
+  --primary-soft-2: #fff1a8;
+  --primary-dark: #8a6800;
 }
 
 * { box-sizing: border-box; }
@@ -22,15 +27,15 @@ button, input, select, textarea { font: inherit; }
 button { border: 0; cursor: pointer; }
 
 .app-shell { display: grid; grid-template-columns: 248px minmax(0, 1fr); min-height: 100vh; }
-.sidebar { background: #fff; border-right: 1px solid #e6e7e9; padding: 18px 14px; position: sticky; top: 0; height: 100vh; overflow-y: auto; z-index: 30; }
-.brand { display: flex; justify-content: center; width: 100%; padding: 2px 0 22px; }
+.sidebar { background: #fff; border-right: 1px solid #e6e7e9; padding: 18px 14px; position: sticky; top: 0; height: 100vh; overflow: hidden; z-index: 30; display: flex; flex-direction: column; }
+.brand { display: flex; justify-content: center; width: 100%; padding: 2px 0 22px; flex: 0 0 auto; background: #fff; }
 .brand-lockup { width: 126px; display: grid; justify-items: center; gap: 2px; }
 .brand-lockup img { display: block; width: 126px; height: 58px; object-fit: contain; }
 .brand-lockup span { color: #8b8e92; font-size: 9px; font-weight: 500; letter-spacing: 2px; line-height: 1; }
-nav { display: grid; gap: 3px; }
+nav { display: grid; gap: 3px; overflow-y: auto; min-height: 0; padding-right: 2px; }
 nav button { display: flex; align-items: center; gap: 11px; min-height: 42px; padding: 0 12px; border-radius: 7px; background: transparent; color: #555; text-align: left; }
 nav button:hover { background: #f7f7f7; color: #111; }
-nav button.active { background: #fff4bd; color: #191919; font-weight: 700; }
+nav button.active { background: var(--primary-soft); color: #191919; font-weight: 700; }
 
 main { min-width: 0; }
 .topbar { height: 76px; display: flex; align-items: center; justify-content: space-between; padding: 0 28px; background: #fff; border-bottom: 1px solid #e6e7e9; position: sticky; top: 0; z-index: 20; }
@@ -39,10 +44,13 @@ main { min-width: 0; }
 .topbar-title { min-width: 0; }
 .topbar-actions { margin-left: auto; display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
 .topbar-action { min-width: 92px; }
-.topbar-action i { color: #8a6800; font-size: 13px; }
+.topbar-action i { color: var(--primary-dark); font-size: 13px; }
+.account-badge { display: inline-flex; width: fit-content; margin-top: 6px; padding: 3px 8px; border-radius: 999px; background: var(--primary-soft); color: var(--primary-dark); font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .4px; }
+.account-badge.active { background: #e5f7ed; color: #166534; }
+.account-badge.suspended, .account-badge.disabled, .account-badge.expired { background: #fff0f0; color: #a02828; }
 .page { padding: 24px 28px 40px; max-width: 1540px; margin: 0 auto; }
 
-button, .upload-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 38px; padding: 0 14px; border-radius: 7px; background: #f3c910; color: #181818; font-weight: 700; transition: .15s ease; }
+button, .upload-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 38px; padding: 0 14px; border-radius: 7px; background: var(--primary); color: var(--primary-text); font-weight: 700; transition: .15s ease; }
 button:hover, .upload-btn:hover { filter: brightness(.96); transform: translateY(-1px); }
 button.ghost { background: #fff; border: 1px solid #dedfe1; font-weight: 600; }
 button.danger { background: #fff0f0; color: #a02828; border: 1px solid #f0c8c8; }
@@ -54,6 +62,8 @@ button:disabled { opacity: .55; cursor: not-allowed; transform: none; }
 .auth-card > span { justify-self: center; color: #8a8f98; font-size: 13px; letter-spacing: 6px; }
 .auth-card h1 { margin: 6px 0 0; font-size: 24px; text-align: center; }
 .auth-card p { margin: 0 0 4px; color: #666b70; text-align: center; line-height: 1.5; }
+.access-card { text-align: center; }
+.access-email { padding: 9px 12px; border-radius: 7px; background: #f4f5f6; font-weight: 700; }
 .auth-card label { display: grid; gap: 6px; color: #555a60; font-size: 13px; font-weight: 700; }
 .auth-links { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
 .auth-links button { min-height: 34px; font-size: 12px; }
@@ -65,22 +75,22 @@ button:disabled { opacity: .55; cursor: not-allowed; transform: none; }
 
 .stat-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
 .stat { background: #fff; min-height: 130px; border: 1px solid #e7e8ea; border-radius: 8px; padding: 18px; box-shadow: 0 4px 14px rgba(25, 25, 25, .04); display: flex; flex-direction: column; align-items: flex-start; gap: 11px; }
-.stat > svg { color: #a47c00; background: #fff4bd; padding: 8px; width: 38px; height: 38px; border-radius: 7px; }
+.stat > svg { color: var(--primary-dark); background: var(--primary-soft); padding: 8px; width: 38px; height: 38px; border-radius: 7px; }
 .stat-card { position: relative; text-align: left; transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease; }
 .stat-card:hover { border-color: #d6b324; box-shadow: 0 8px 22px rgba(25,25,25,.09); }
-.stat-card > i { width: 40px; height: 40px; display: grid; place-items: center; color: #997300; background: #fff1a8; border-radius: 7px; font-size: 17px; }
-.stat-card small { margin-top: auto; color: #8a6800; font-size: 10px; font-weight: 700; text-transform: uppercase; }
+.stat-card > i { width: 40px; height: 40px; display: grid; place-items: center; color: var(--primary-dark); background: var(--primary-soft-2); border-radius: 7px; font-size: 17px; }
+.stat-card small { margin-top: auto; color: var(--primary-dark); font-size: 10px; font-weight: 700; text-transform: uppercase; }
 .stat span { color: #74777b; font-size: 13px; }
 .stat strong { font-size: 22px; letter-spacing: 0; }
 .quickbar { display: flex; flex-wrap: wrap; gap: 9px; margin: 18px 0; }
 .revenue-chart { display: grid; grid-template-columns: minmax(0, 1fr) 220px; align-items: center; gap: 32px; margin-bottom: 16px; padding: 24px 30px; background: #fff; border: 1px solid #e3e5e7; border-radius: 8px; }
-.chart-copy .eyebrow { color: #8a6800; font-size: 11px; font-weight: 800; text-transform: uppercase; }
+.chart-copy .eyebrow { color: var(--primary-dark); font-size: 11px; font-weight: 800; text-transform: uppercase; }
 .chart-copy h2 { margin: 6px 0 7px; font-size: 22px; }
 .chart-copy > p { max-width: 570px; margin: 0; color: #6c7074; font-size: 13px; line-height: 1.6; }
 .chart-legend { display: flex; flex-wrap: wrap; gap: 24px; margin-top: 22px; }
 .chart-legend > div { display: flex; align-items: center; gap: 9px; }
 .chart-legend i { width: 10px; height: 34px; border-radius: 3px; }
-.legend-paid { background: #efb900; }
+.legend-paid { background: var(--primary); }
 .legend-pending { background: #30363b; }
 .chart-legend span { display: grid; gap: 3px; color: #777b7f; font-size: 11px; }
 .chart-legend strong { color: #222629; font-size: 15px; }
@@ -88,7 +98,7 @@ button:disabled { opacity: .55; cursor: not-allowed; transform: none; }
 .donut-chart { width: 100%; height: 100%; }
 .donut-chart circle { fill: none; stroke-width: 5; }
 .donut-base { stroke: #30363b; }
-.donut-paid { stroke: #efb900; stroke-linecap: round; transition: stroke-dasharray .35s ease; }
+.donut-paid { stroke: var(--primary); stroke-linecap: round; transition: stroke-dasharray .35s ease; }
 .donut-label { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; }
 .donut-label strong { font-size: 29px; line-height: 1; }
 .donut-label span { margin-top: 5px; color: #73777b; font-size: 11px; text-transform: uppercase; }
@@ -159,16 +169,16 @@ button:disabled { opacity: .55; cursor: not-allowed; transform: none; }
 .calendar-weekdays { margin-bottom: 7px; }
 .calendar-weekdays span { text-align: center; color: #92969a; font-size: 10px; font-weight: 800; text-transform: uppercase; }
 .calendar-days button { aspect-ratio: 1; min-height: 0; padding: 0; background: transparent; color: #34383c; border: 1px solid transparent; border-radius: 6px; font-size: 12px; font-weight: 600; }
-.calendar-days button:hover { transform: none; background: #fff4bd; }
+.calendar-days button:hover { transform: none; background: var(--primary-soft); }
 .calendar-days button.muted { color: #b7b9bc; }
 .calendar-days button.today { border-color: #e4b700; color: #7f6100; }
 .calendar-days button.selected { background: #efbf00; border-color: #efbf00; color: #171717; box-shadow: 0 4px 10px rgba(211,165,0,.25); }
 .calendar-foot { display: flex; justify-content: space-between; margin-top: 12px; padding-top: 12px; border-top: 1px solid #eceef0; }
-.calendar-foot button { min-height: 30px; padding: 0 8px; background: transparent; color: #8a6800; font-size: 11px; }
+.calendar-foot button { min-height: 30px; padding: 0 8px; background: transparent; color: var(--primary-dark); font-size: 11px; }
 .month-calendar { width: 300px; }
 .month-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
 .month-grid button { min-height: 42px; padding: 0; background: #f6f7f8; color: #44484c; font-size: 12px; }
-.month-grid button:hover { transform: none; background: #fff4bd; }
+.month-grid button:hover { transform: none; background: var(--primary-soft); }
 .month-grid button.selected { background: #efbf00; color: #171717; box-shadow: 0 4px 10px rgba(211,165,0,.22); }
 
 .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
@@ -202,7 +212,7 @@ tbody tr:hover { background: #fffdf3; }
 .confirm-modal { width: min(430px, 100%); text-align: center; padding: 26px; }
 .confirm-modal h2 { margin: 10px 0 8px; font-size: 22px; }
 .confirm-modal p { margin: 0; color: #62666a; line-height: 1.55; }
-.confirm-icon { width: 48px; height: 48px; display: grid; place-items: center; margin: 0 auto; color: #8a6800; background: #fff1a8; border-radius: 50%; }
+.confirm-icon { width: 48px; height: 48px; display: grid; place-items: center; margin: 0 auto; color: var(--primary-dark); background: var(--primary-soft-2); border-radius: 50%; }
 .confirm-icon.danger { color: #a02828; background: #fff0f0; }
 .confirm-actions { justify-content: center; }
 .confirm-actions button { min-width: 110px; }
@@ -301,7 +311,7 @@ tbody tr:hover { background: #fffdf3; }
 .company-contact { display: grid; gap: 9px; margin-top: 15px; }
 .company-contact span { display: grid; grid-template-columns: 16px 48px minmax(0, 1fr); align-items: center; gap: 7px; color: #3f4245; font-size: 12px; }
 .company-contact i { color: #a27b00; font-size: 10px; text-align: center; }
-.company-contact b { color: #8a6800; font-size: 9px; letter-spacing: .7px; text-transform: uppercase; }
+.company-contact b { color: var(--primary-dark); font-size: 9px; letter-spacing: .7px; text-transform: uppercase; }
 .company-contact em { min-width: 0; overflow-wrap: anywhere; color: #3f4245; font-style: normal; }
 .print-table { white-space: normal; margin: 0 8px; width: calc(100% - 16px); }
 .print-table small { display: block; margin-top: 4px; color: #777; }
@@ -492,6 +502,27 @@ const formatDate = (value) => {
   return match ? `${match[3]}-${match[2]}-${match[1]}` : value || '-';
 };
 const toInputDate = (value) => String(value || '').slice(0, 10);
+const clamp = (value) => Math.max(0, Math.min(255, value));
+const hexToRgb = (hex) => {
+  const normalized = String(hex || '#f3c910').replace('#', '').trim();
+  const safe = /^[0-9a-f]{6}$/i.test(normalized) ? normalized : 'f3c910';
+  return [0, 2, 4].map((index) => parseInt(safe.slice(index, index + 2), 16));
+};
+const mixColor = (hex, target, amount) => {
+  const rgb = hexToRgb(hex).map((channel, index) => clamp(Math.round(channel + (target[index] - channel) * amount)));
+  return `#${rgb.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`;
+};
+const readableTextFor = (hex) => {
+  const [r, g, b] = hexToRgb(hex);
+  return ((r * 299 + g * 587 + b * 114) / 1000) > 150 ? '#181818' : '#ffffff';
+};
+const buildTheme = (primary = '#f3c910') => ({
+  '--primary': primary,
+  '--primary-text': readableTextFor(primary),
+  '--primary-soft': mixColor(primary, [255, 255, 255], 0.72),
+  '--primary-soft-2': mixColor(primary, [255, 255, 255], 0.86),
+  '--primary-dark': mixColor(primary, [0, 0, 0], 0.36)
+});
 const formatDateTime = (value) => {
   if (!value) return '-';
   const date = new Date(value);
@@ -509,13 +540,18 @@ async function apiRequest(path, { method = 'GET', token, body } = {}) {
     body: body === undefined ? undefined : JSON.stringify(body)
   });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.message || 'Request failed');
+  if (!response.ok) {
+    const error = new Error(data.message || 'Request failed');
+    error.status = response.status;
+    throw error;
+  }
   return data;
 }
 
 const emptySettings = {
   companyName: 'REACH Design',
   logo: DEFAULT_LOGO,
+  primaryColor: '#f3c910',
   phone: '',
   email: '',
   address: '',
@@ -700,6 +736,7 @@ function App() {
   const [openTarget, setOpenTarget] = React.useState(null);
   const [hydrated, setHydrated] = React.useState(false);
   const [syncPaused, setSyncPaused] = React.useState(true);
+  const [accessIssue, setAccessIssue] = React.useState('');
   const syncTimers = React.useRef({});
   const [clients, setClients] = React.useState([]);
   const [services, setServices] = React.useState(serviceSeed);
@@ -713,6 +750,7 @@ function App() {
   const [trash, setTrash] = React.useState([]);
 
   const applyCloudState = (state = {}) => {
+    setAccessIssue('');
     setSyncPaused(true);
     setClients(state.clients || []);
     setServices((state.services && state.services.length) ? state.services : serviceSeed);
@@ -790,9 +828,14 @@ function App() {
 
   React.useEffect(() => {
     if (!auth?.token) return;
+    setAccessIssue('');
     setHydrated(false);
     setSyncPaused(true);
     loadCloudState().catch((error) => {
+      if (error.status === 403) {
+        setAccessIssue(error.message);
+        return;
+      }
       notify(error.message === 'Unauthorized' ? 'Please login again' : error.message);
       if (error.message === 'Unauthorized') saveAuth(null);
     });
@@ -889,6 +932,7 @@ function App() {
   }
 
   if (!hydrated) {
+    if (accessIssue) return <AccessIssueScreen message={accessIssue} user={auth.user} onLogout={() => saveAuth(null)} />;
     return <div className="loading-screen">Loading REACH INVOICE cloud data...</div>;
   }
 
@@ -925,8 +969,10 @@ function App() {
     settings: <CompanySettings ctx={context} />
   };
 
+  const theme = buildTheme(settings.primaryColor);
+
   return (
-    <div className="app-shell">
+    <div className="app-shell" style={theme}>
       <aside className={`sidebar ${menuOpen ? 'open' : ''}`}>
         <div className="brand">
           <div className="brand-lockup">
@@ -948,6 +994,7 @@ function App() {
           <div className="topbar-title">
             <h1>{navItems.find(([id]) => id === active)?.[1]}</h1>
             <p>{formatDate(today())}</p>
+            <AccountBadge organization={auth.user?.organization} />
           </div>
           <div className="topbar-actions">
             <button className="ghost topbar-action" onClick={() => navigate('settings')}>
@@ -967,6 +1014,34 @@ function App() {
       {confirmDialog && <ConfirmDialog config={confirmDialog} onClose={() => setConfirmDialog(null)} />}
     </div>
   );
+}
+
+function AccessIssueScreen({ message, user, onLogout }) {
+  return (
+    <main className="auth-page">
+      <section className="auth-card access-card">
+        <img src={DEFAULT_LOGO} alt="Reach Design" />
+        <span>INVOICE</span>
+        <h1>{message.toLowerCase().includes('trial') ? 'Trial Period Ended' : 'Account Access Paused'}</h1>
+        <p>{message}</p>
+        {user?.email && <p className="access-email">{user.email}</p>}
+        <button onClick={onLogout}>Back to Login</button>
+      </section>
+    </main>
+  );
+}
+
+function AccountBadge({ organization }) {
+  if (!organization?.status) return null;
+  const trialEnd = toInputDate(organization.trialEndsAt);
+  const subscriptionEnd = toInputDate(organization.subscriptionEndsAt);
+  const isTrial = organization.status === 'trial';
+  const label = isTrial
+    ? `Trial active${trialEnd ? ` until ${formatDate(trialEnd)}` : ''}`
+    : organization.status === 'active' && subscriptionEnd
+      ? `Active until ${formatDate(subscriptionEnd)}`
+      : organization.status;
+  return <span className={`account-badge ${organization.status}`}>{label}</span>;
 }
 
 function AuthScreen({ onAuth }) {
@@ -2231,7 +2306,7 @@ function AdminPanel({ auth, notify }) {
       .then((result) => setTenants(result.tenants || []))
       .catch((error) => notify(error.message))
       .finally(() => setLoading(false));
-  }, [auth.token, notify]);
+  }, [auth.token]);
 
   React.useEffect(() => {
     loadTenants();
@@ -2314,7 +2389,7 @@ function CompanySettings({ ctx }) {
     if (!dirty) setForm(data.settings);
   }, [data.settings, dirty]);
   const fields = [
-    ['companyName', 'Company Name'], ['phone', 'Phone'], ['email', 'Email'], ['address', 'Address', 'textarea'], ['gstNumber', 'GST Number'],
+    ['companyName', 'Company Name'], ['primaryColor', 'Primary Theme Color', 'color'], ['phone', 'Phone'], ['email', 'Email'], ['address', 'Address', 'textarea'], ['gstNumber', 'GST Number'],
     ['bankDetails', 'Bank Details', 'textarea'], ['upiId', 'UPI ID'], ['invoicePrefix', 'Invoice Prefix'], ['quotationPrefix', 'Quotation Prefix'], ['terms', 'Default Terms and Conditions', 'textarea']
   ];
   const uploadImage = (key, file) => {

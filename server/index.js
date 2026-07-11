@@ -63,9 +63,8 @@ function requirePlatformAdmin(req, res, next) {
 async function requireActiveOrganization(req, res, next) {
   try {
     const result = await pool.query('SELECT status, trial_ends_at, subscription_ends_at FROM organizations WHERE id = $1', [req.user.organizationId]);
-    if (!accountIsAllowed(result.rows[0])) {
-      return res.status(403).json({ message: 'Account trial expired or disabled. Please contact support.' });
-    }
+    const blockMessage = accountBlockMessage(result.rows[0]);
+    if (blockMessage) return res.status(403).json({ message: blockMessage });
     next();
   } catch (error) {
     res.status(500).json({ message: 'Account check failed' });
@@ -91,12 +90,17 @@ function publicUser(user) {
 }
 
 function accountIsAllowed(org) {
-  if (!org) return false;
-  if (org.status === 'suspended' || org.status === 'disabled') return false;
-  if (org.status === 'trial' && org.trial_ends_at && new Date(org.trial_ends_at).getTime() < Date.now()) return false;
-  if (org.subscription_ends_at && new Date(org.subscription_ends_at).getTime() < Date.now()) return false;
-  if (org.status === 'expired') return false;
-  return true;
+  return !accountBlockMessage(org);
+}
+
+function accountBlockMessage(org) {
+  if (!org) return 'Account workspace was not found. Please contact support.';
+  if (org.status === 'suspended') return 'Your account is suspended. Please contact support.';
+  if (org.status === 'disabled') return 'Your account is disabled. Please contact support.';
+  if (org.status === 'trial' && org.trial_ends_at && new Date(org.trial_ends_at).getTime() < Date.now()) return 'Your trial period has ended. Please contact support to activate your account.';
+  if (org.subscription_ends_at && new Date(org.subscription_ends_at).getTime() < Date.now()) return 'Your subscription has ended. Please contact support to renew your account.';
+  if (org.status === 'expired') return 'Your account has expired. Please contact support.';
+  return '';
 }
 
 async function getUserWithOrganization(email) {
@@ -217,9 +221,8 @@ app.post('/api/auth/login', async (req, res) => {
   if (!user || !(await bcrypt.compare(password, user.password_hash))) {
     return res.status(401).json({ message: 'Invalid email or password' });
   }
-  if (!accountIsAllowed({ status: user.organization_status, trial_ends_at: user.trial_ends_at, subscription_ends_at: user.subscription_ends_at })) {
-    return res.status(403).json({ message: 'Account trial expired or disabled. Please contact support.' });
-  }
+  const blockMessage = accountBlockMessage({ status: user.organization_status, trial_ends_at: user.trial_ends_at, subscription_ends_at: user.subscription_ends_at });
+  if (blockMessage) return res.status(403).json({ message: blockMessage });
   res.json({ token: signUser(user), user: publicUser(user) });
 });
 

@@ -75,6 +75,27 @@ const formatDate = (value) => {
   return match ? `${match[3]}-${match[2]}-${match[1]}` : value || '-';
 };
 const toInputDate = (value) => String(value || '').slice(0, 10);
+const clamp = (value) => Math.max(0, Math.min(255, value));
+const hexToRgb = (hex) => {
+  const normalized = String(hex || '#f3c910').replace('#', '').trim();
+  const safe = /^[0-9a-f]{6}$/i.test(normalized) ? normalized : 'f3c910';
+  return [0, 2, 4].map((index) => parseInt(safe.slice(index, index + 2), 16));
+};
+const mixColor = (hex, target, amount) => {
+  const rgb = hexToRgb(hex).map((channel, index) => clamp(Math.round(channel + (target[index] - channel) * amount)));
+  return `#${rgb.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`;
+};
+const readableTextFor = (hex) => {
+  const [r, g, b] = hexToRgb(hex);
+  return ((r * 299 + g * 587 + b * 114) / 1000) > 150 ? '#181818' : '#ffffff';
+};
+const buildTheme = (primary = '#f3c910') => ({
+  '--primary': primary,
+  '--primary-text': readableTextFor(primary),
+  '--primary-soft': mixColor(primary, [255, 255, 255], 0.72),
+  '--primary-soft-2': mixColor(primary, [255, 255, 255], 0.86),
+  '--primary-dark': mixColor(primary, [0, 0, 0], 0.36)
+});
 const formatDateTime = (value) => {
   if (!value) return '-';
   const date = new Date(value);
@@ -92,13 +113,18 @@ async function apiRequest(path, { method = 'GET', token, body } = {}) {
     body: body === undefined ? undefined : JSON.stringify(body)
   });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.message || 'Request failed');
+  if (!response.ok) {
+    const error = new Error(data.message || 'Request failed');
+    error.status = response.status;
+    throw error;
+  }
   return data;
 }
 
 const emptySettings = {
   companyName: 'REACH Design',
   logo: DEFAULT_LOGO,
+  primaryColor: '#f3c910',
   phone: '',
   email: '',
   address: '',
@@ -283,6 +309,7 @@ function App() {
   const [openTarget, setOpenTarget] = React.useState(null);
   const [hydrated, setHydrated] = React.useState(false);
   const [syncPaused, setSyncPaused] = React.useState(true);
+  const [accessIssue, setAccessIssue] = React.useState('');
   const syncTimers = React.useRef({});
   const [clients, setClients] = React.useState([]);
   const [services, setServices] = React.useState(serviceSeed);
@@ -296,6 +323,7 @@ function App() {
   const [trash, setTrash] = React.useState([]);
 
   const applyCloudState = (state = {}) => {
+    setAccessIssue('');
     setSyncPaused(true);
     setClients(state.clients || []);
     setServices((state.services && state.services.length) ? state.services : serviceSeed);
@@ -373,9 +401,14 @@ function App() {
 
   React.useEffect(() => {
     if (!auth?.token) return;
+    setAccessIssue('');
     setHydrated(false);
     setSyncPaused(true);
     loadCloudState().catch((error) => {
+      if (error.status === 403) {
+        setAccessIssue(error.message);
+        return;
+      }
       notify(error.message === 'Unauthorized' ? 'Please login again' : error.message);
       if (error.message === 'Unauthorized') saveAuth(null);
     });
@@ -472,6 +505,7 @@ function App() {
   }
 
   if (!hydrated) {
+    if (accessIssue) return <AccessIssueScreen message={accessIssue} user={auth.user} onLogout={() => saveAuth(null)} />;
     return <div className="loading-screen">Loading REACH INVOICE cloud data...</div>;
   }
 
@@ -508,8 +542,10 @@ function App() {
     settings: <CompanySettings ctx={context} />
   };
 
+  const theme = buildTheme(settings.primaryColor);
+
   return (
-    <div className="app-shell">
+    <div className="app-shell" style={theme}>
       <aside className={`sidebar ${menuOpen ? 'open' : ''}`}>
         <div className="brand">
           <div className="brand-lockup">
@@ -531,6 +567,7 @@ function App() {
           <div className="topbar-title">
             <h1>{navItems.find(([id]) => id === active)?.[1]}</h1>
             <p>{formatDate(today())}</p>
+            <AccountBadge organization={auth.user?.organization} />
           </div>
           <div className="topbar-actions">
             <button className="ghost topbar-action" onClick={() => navigate('settings')}>
@@ -550,6 +587,34 @@ function App() {
       {confirmDialog && <ConfirmDialog config={confirmDialog} onClose={() => setConfirmDialog(null)} />}
     </div>
   );
+}
+
+function AccessIssueScreen({ message, user, onLogout }) {
+  return (
+    <main className="auth-page">
+      <section className="auth-card access-card">
+        <img src={DEFAULT_LOGO} alt="Reach Design" />
+        <span>INVOICE</span>
+        <h1>{message.toLowerCase().includes('trial') ? 'Trial Period Ended' : 'Account Access Paused'}</h1>
+        <p>{message}</p>
+        {user?.email && <p className="access-email">{user.email}</p>}
+        <button onClick={onLogout}>Back to Login</button>
+      </section>
+    </main>
+  );
+}
+
+function AccountBadge({ organization }) {
+  if (!organization?.status) return null;
+  const trialEnd = toInputDate(organization.trialEndsAt);
+  const subscriptionEnd = toInputDate(organization.subscriptionEndsAt);
+  const isTrial = organization.status === 'trial';
+  const label = isTrial
+    ? `Trial active${trialEnd ? ` until ${formatDate(trialEnd)}` : ''}`
+    : organization.status === 'active' && subscriptionEnd
+      ? `Active until ${formatDate(subscriptionEnd)}`
+      : organization.status;
+  return <span className={`account-badge ${organization.status}`}>{label}</span>;
 }
 
 function AuthScreen({ onAuth }) {
@@ -1814,7 +1879,7 @@ function AdminPanel({ auth, notify }) {
       .then((result) => setTenants(result.tenants || []))
       .catch((error) => notify(error.message))
       .finally(() => setLoading(false));
-  }, [auth.token, notify]);
+  }, [auth.token]);
 
   React.useEffect(() => {
     loadTenants();
@@ -1897,7 +1962,7 @@ function CompanySettings({ ctx }) {
     if (!dirty) setForm(data.settings);
   }, [data.settings, dirty]);
   const fields = [
-    ['companyName', 'Company Name'], ['phone', 'Phone'], ['email', 'Email'], ['address', 'Address', 'textarea'], ['gstNumber', 'GST Number'],
+    ['companyName', 'Company Name'], ['primaryColor', 'Primary Theme Color', 'color'], ['phone', 'Phone'], ['email', 'Email'], ['address', 'Address', 'textarea'], ['gstNumber', 'GST Number'],
     ['bankDetails', 'Bank Details', 'textarea'], ['upiId', 'UPI ID'], ['invoicePrefix', 'Invoice Prefix'], ['quotationPrefix', 'Quotation Prefix'], ['terms', 'Default Terms and Conditions', 'textarea']
   ];
   const uploadImage = (key, file) => {
