@@ -13,7 +13,7 @@ const { pool } = require('./db');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'change-this-secret-before-production';
-const COLLECTIONS = ['clients', 'services', 'quotations', 'invoices', 'payments', 'projects', 'expenses', 'activities'];
+const COLLECTIONS = ['clients', 'services', 'quotations', 'invoices', 'payments', 'projects', 'expenses', 'activities', 'trash'];
 const SINGLETONS = ['companySettings'];
 
 app.use(helmet({ contentSecurityPolicy: false }));
