@@ -346,7 +346,9 @@ tbody tr:hover { background: #fffdf3; }
   .summary-strip { flex-direction: column; }
   .report-modes { width: 100%; }
   .report-modes button { flex: 1; padding: 0 8px; }
-  .report-metrics { grid-template-columns: 1fr; }
+  .report-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .report-metrics > span { min-height: 74px; padding: 11px; }
+  .report-metrics strong { font-size: 16px; }
   .modal-backdrop { padding: 8px; }
   .modal { max-height: calc(100vh - 16px); padding: 15px; }
   .print-head, .print-meta { flex-direction: column; }
