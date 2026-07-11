@@ -15,6 +15,10 @@ const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'change-this-secret-before-production';
 const COLLECTIONS = ['clients', 'services', 'quotations', 'invoices', 'payments', 'projects', 'expenses', 'activities', 'trash'];
 const SINGLETONS = ['companySettings'];
+const ADMIN_EMAILS = String(process.env.ADMIN_EMAILS || '')
+  .split(',')
+  .map((email) => normalizeEmail(email))
+  .filter(Boolean);
 
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({ origin: process.env.CORS_ORIGIN || true, credentials: true }));
@@ -27,7 +31,8 @@ function signUser(user) {
     userId: user.id,
     organizationId: user.organization_id,
     email: user.email,
-    role: user.role
+    role: user.role,
+    isPlatformAdmin: isPlatformAdmin(user.email)
   }, JWT_SECRET, { expiresIn: '7d' });
 }
 
@@ -46,8 +51,64 @@ function requireAuth(req, res, next) {
   }
 }
 
+function isPlatformAdmin(email) {
+  return ADMIN_EMAILS.includes(normalizeEmail(email));
+}
+
+function requirePlatformAdmin(req, res, next) {
+  if (!req.user?.isPlatformAdmin && !isPlatformAdmin(req.user?.email)) return res.status(403).json({ message: 'Admin access required' });
+  next();
+}
+
+async function requireActiveOrganization(req, res, next) {
+  try {
+    const result = await pool.query('SELECT status, trial_ends_at, subscription_ends_at FROM organizations WHERE id = $1', [req.user.organizationId]);
+    if (!accountIsAllowed(result.rows[0])) {
+      return res.status(403).json({ message: 'Account trial expired or disabled. Please contact support.' });
+    }
+    next();
+  } catch (error) {
+    res.status(500).json({ message: 'Account check failed' });
+  }
+}
+
 function publicUser(user) {
-  return { id: user.id, email: user.email, organizationId: user.organization_id, role: user.role };
+  return {
+    id: user.id,
+    email: user.email,
+    organizationId: user.organization_id,
+    role: user.role,
+    emailVerified: !!user.email_verified,
+    isPlatformAdmin: isPlatformAdmin(user.email),
+    organization: user.organization_name ? {
+      name: user.organization_name,
+      status: user.organization_status,
+      plan: user.organization_plan,
+      trialEndsAt: user.trial_ends_at,
+      subscriptionEndsAt: user.subscription_ends_at
+    } : undefined
+  };
+}
+
+function accountIsAllowed(org) {
+  if (!org) return false;
+  if (org.status === 'suspended' || org.status === 'disabled') return false;
+  if (org.status === 'trial' && org.trial_ends_at && new Date(org.trial_ends_at).getTime() < Date.now()) return false;
+  if (org.subscription_ends_at && new Date(org.subscription_ends_at).getTime() < Date.now()) return false;
+  if (org.status === 'expired') return false;
+  return true;
+}
+
+async function getUserWithOrganization(email) {
+  const result = await pool.query(
+    `SELECT users.*, organizations.name AS organization_name, organizations.status AS organization_status,
+            organizations.plan AS organization_plan, organizations.trial_ends_at, organizations.subscription_ends_at
+     FROM users
+     JOIN organizations ON organizations.id = users.organization_id
+     WHERE users.email = $1`,
+    [email]
+  );
+  return result.rows[0];
 }
 
 function validateCollection(key) {
@@ -119,7 +180,10 @@ app.post('/api/auth/register', async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const org = await client.query('INSERT INTO organizations (name) VALUES ($1) RETURNING *', [companyName]);
+    const org = await client.query(
+      "INSERT INTO organizations (name, status, plan, trial_ends_at) VALUES ($1, 'trial', 'trial', now() + interval '14 days') RETURNING *",
+      [companyName]
+    );
     const passwordHash = await bcrypt.hash(password, 12);
     const user = await client.query(
       'INSERT INTO users (organization_id, email, password_hash) VALUES ($1, $2, $3) RETURNING *',
@@ -127,7 +191,17 @@ app.post('/api/auth/register', async (req, res) => {
     );
     await setSingleton(client, org.rows[0].id, 'companySettings', { companyName });
     await client.query('COMMIT');
-    res.json({ token: signUser(user.rows[0]), user: publicUser(user.rows[0]) });
+    res.json({
+      token: signUser(user.rows[0]),
+      user: publicUser({
+        ...user.rows[0],
+        organization_name: org.rows[0].name,
+        organization_status: org.rows[0].status,
+        organization_plan: org.rows[0].plan,
+        trial_ends_at: org.rows[0].trial_ends_at,
+        subscription_ends_at: org.rows[0].subscription_ends_at
+      })
+    });
   } catch (error) {
     await client.query('ROLLBACK');
     res.status(error.code === '23505' ? 409 : 500).json({ message: error.code === '23505' ? 'Email already exists' : 'Registration failed' });
@@ -139,10 +213,12 @@ app.post('/api/auth/register', async (req, res) => {
 app.post('/api/auth/login', async (req, res) => {
   const email = normalizeEmail(req.body.email);
   const password = String(req.body.password || '');
-  const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-  const user = result.rows[0];
+  const user = await getUserWithOrganization(email);
   if (!user || !(await bcrypt.compare(password, user.password_hash))) {
     return res.status(401).json({ message: 'Invalid email or password' });
+  }
+  if (!accountIsAllowed({ status: user.organization_status, trial_ends_at: user.trial_ends_at, subscription_ends_at: user.subscription_ends_at })) {
+    return res.status(403).json({ message: 'Account trial expired or disabled. Please contact support.' });
   }
   res.json({ token: signUser(user), user: publicUser(user) });
 });
@@ -162,14 +238,52 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 });
 
 app.get('/api/me', requireAuth, async (req, res) => {
-  res.json({ user: req.user });
+  const user = await getUserWithOrganization(req.user.email);
+  if (!user) return res.status(404).json({ message: 'User not found' });
+  res.json({ user: publicUser(user) });
 });
 
-app.get('/api/app-state', requireAuth, async (req, res) => {
+app.get('/api/admin/tenants', requireAuth, requirePlatformAdmin, async (req, res) => {
+  const result = await pool.query(
+    `SELECT organizations.id, organizations.name, organizations.status, organizations.plan,
+            organizations.trial_ends_at, organizations.subscription_ends_at, organizations.created_at,
+            users.email AS owner_email,
+            COUNT(app_records.record_id)::int AS record_count
+     FROM organizations
+     LEFT JOIN users ON users.organization_id = organizations.id AND users.role = 'owner'
+     LEFT JOIN app_records ON app_records.organization_id = organizations.id
+     GROUP BY organizations.id, users.email
+     ORDER BY organizations.created_at DESC`
+  );
+  res.json({ tenants: result.rows });
+});
+
+app.patch('/api/admin/tenants/:id', requireAuth, requirePlatformAdmin, async (req, res) => {
+  const allowedStatuses = ['trial', 'active', 'suspended', 'disabled', 'expired'];
+  const allowedPlans = ['trial', 'basic', 'pro', 'enterprise'];
+  const status = String(req.body.status || '').trim();
+  const plan = String(req.body.plan || '').trim();
+  if (!allowedStatuses.includes(status)) return res.status(400).json({ message: 'Invalid account status' });
+  if (!allowedPlans.includes(plan)) return res.status(400).json({ message: 'Invalid plan' });
+  const trialEndsAt = req.body.trialEndsAt || null;
+  const subscriptionEndsAt = req.body.subscriptionEndsAt || null;
+  const result = await pool.query(
+    `UPDATE organizations
+     SET status = $1, plan = $2, trial_ends_at = COALESCE($3::timestamptz, trial_ends_at),
+         subscription_ends_at = $4::timestamptz, updated_at = now()
+     WHERE id = $5
+     RETURNING id, name, status, plan, trial_ends_at, subscription_ends_at, created_at`,
+    [status, plan, trialEndsAt, subscriptionEndsAt, req.params.id]
+  );
+  if (!result.rows[0]) return res.status(404).json({ message: 'Tenant not found' });
+  res.json({ tenant: result.rows[0] });
+});
+
+app.get('/api/app-state', requireAuth, requireActiveOrganization, async (req, res) => {
   res.json(await getAppState(req.user.organizationId));
 });
 
-app.put('/api/app-state/:key', requireAuth, async (req, res) => {
+app.put('/api/app-state/:key', requireAuth, requireActiveOrganization, async (req, res) => {
   const key = req.params.key;
   const client = await pool.connect();
   try {
@@ -186,7 +300,7 @@ app.put('/api/app-state/:key', requireAuth, async (req, res) => {
   }
 });
 
-app.post('/api/app-state/import', requireAuth, async (req, res) => {
+app.post('/api/app-state/import', requireAuth, requireActiveOrganization, async (req, res) => {
   const backup = req.body || {};
   const client = await pool.connect();
   try {
@@ -203,13 +317,13 @@ app.post('/api/app-state/import', requireAuth, async (req, res) => {
   }
 });
 
-app.post('/api/app-state/reset', requireAuth, async (req, res) => {
+app.post('/api/app-state/reset', requireAuth, requireActiveOrganization, async (req, res) => {
   await pool.query('DELETE FROM app_records WHERE organization_id = $1', [req.user.organizationId]);
   await pool.query('DELETE FROM app_singletons WHERE organization_id = $1', [req.user.organizationId]);
   res.json({ ok: true });
 });
 
-app.get('/api/records/:key', requireAuth, async (req, res) => {
+app.get('/api/records/:key', requireAuth, requireActiveOrganization, async (req, res) => {
   try {
     validateCollection(req.params.key);
     const limit = Math.min(Number(req.query.limit || 50), 200);
