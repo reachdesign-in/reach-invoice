@@ -20,6 +20,7 @@ const ADMIN_EMAILS = String(process.env.ADMIN_EMAILS || '')
   .map((email) => normalizeEmail(email))
   .filter(Boolean);
 
+app.set('trust proxy', 1);
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({ origin: process.env.CORS_ORIGIN || true, credentials: true }));
 app.use(express.json({ limit: '25mb' }));
@@ -348,6 +349,17 @@ app.get('/api/records/:key', requireAuth, requireActiveOrganization, async (req,
     res.json({ rows: rows.rows.map((row) => row.data), limit, offset });
   } catch (error) {
     res.status(error.status || 500).json({ message: error.message || 'Records failed' });
+  }
+});
+
+app.get('/api/health', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  try {
+    await pool.query('SELECT 1');
+    res.json({ ok: true, database: 'connected' });
+  } catch (error) {
+    console.error('Health check failed:', error.message);
+    res.status(503).json({ ok: false, database: 'unavailable' });
   }
 });
 
